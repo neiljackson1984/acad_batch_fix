@@ -1,0 +1,26 @@
+
+ 2022-07-24-1623
+ After running the script to completion with fits and starts, only two dwg files remain unchanged:
+ - \wsp-us-pw-02\d0228632\TRC0976_P-PH2-CHN.dwg
+ - This is a zero-byte file.
+
+ - \wsp-us-pw-02\d0162142\ver00002\TRC0975_X-PH1-TRK.dwg
+ weirdly, this is not showing up in the log.  Could I have skipped it inadvertently by means of the skipTo parameter? 
+
+   Now working .*d0162142\\ver00002\\TRC0975_X-PH1-TRK.dwg
+   Now working .*d0339745\\TRC0975_X-PH1-TRK.dwg
+
+ # command to extract the "baseline" tree (i.e. the starting point, extracted from projectwise) to a
+ # a specified directory, in preparation for doing a winmerge comparison:
+ rm -rf "C:/work/nakano_marginal_way_comparison/1/*"; git -C "C:/work/nakano_marginal_way" --work-tree="C:/work/nakano_marginal_way_comparison/1" checkout baseline1 -- .
+
+ # and checkout the current head tree to another directory:
+ rm -rf "C:/work/nakano_marginal_way_comparison/2/*"; git -C "C:/work/nakano_marginal_way" --work-tree="C:/work/nakano_marginal_way_comparison/2" checkout HEAD -- .
+
+2022-07-25-1141:
+ ran the script to completion for with no stops (that's a first)
+ excellent: Now, the only dwg file that the script is not modifying is the pathological zero-byte file C:\work\nakano_marginal_way_comparison\1\wsp-us-pw-02\d0228632\TRC0976_P-PH2-CHN.dwg
+ the size of the wsp-us-pw-02 directory changed from 1219 megabytes to 992 megabytes, and processing took 18696 seconds.
+
+2022-07-25-1147:
+ Now will run the script on the results of the last run, to compare processing speed.

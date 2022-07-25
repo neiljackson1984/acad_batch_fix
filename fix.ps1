@@ -6,7 +6,7 @@ $pathOfAcadExecutable = join-path $env:ProgramFiles "Autodesk/AutoCAD 2018/acad.
 $pathOfDirectoryInWhichToSearchForDwgFiles='C:\bms'
 $pathOfWorkingDirectoryInWhichToRunAcad=$PSScriptRoot
 
-$skipToOrdinal = 116
+$skipToOrdinal = $null
 # a hack for resuming our place in the sequence, intended for use in debugging.
 # unassign or set to $null to to not skip anything
 
@@ -95,12 +95,15 @@ GroupAdd, fatalError1WindowDefinition             ,AutoCAD Error Aborting,FATAL 
 GroupAdd, fatalError2WindowDefinition             ,AutoCAD Alert,AutoCAD cannot continue
 GroupAdd, projectwiseSavePromptWindowDefinition   ,ProjectWise,Save changes to Drawing1.dwg
 GroupAdd, drawingFileNotValidWindowDefinition     ,AutoCAD Message ahk_exe acad.exe,Drawing file is not valid.
+; GroupAdd, openDrawingErrorsFoundWindowDefinition  ,Open Drawing - Errors Found,Would you like to cancel this open
+GroupAdd, openDrawingErrorsFoundWindowDefinition  ,Open Drawing - Errors Found
 
 GroupAdd, anyPopupWindowDefinition                ,ahk_group lostSheetSetAssociationWindowDefinition
 GroupAdd, anyPopupWindowDefinition                ,ahk_group fatalError1WindowDefinition
 GroupAdd, anyPopupWindowDefinition                ,ahk_group fatalError2WindowDefinition
 GroupAdd, anyPopupWindowDefinition                ,ahk_group projectwiseSavePromptWindowDefinition
 GroupAdd, anyPopupWindowDefinition                ,ahk_group drawingFileNotValidWindowDefinition
+GroupAdd, anyPopupWindowDefinition                ,ahk_group openDrawingErrorsFoundWindowDefinition
 
 
 
@@ -114,7 +117,7 @@ Loop{
         ControlClick,Ignore the lost association,
     } else if WinExist("ahk_group fatalError1WindowDefinition") {
         writeToLog("slapping down fatal error popup 1")
-        ControlSend, ,{Enter}
+        ControlSend, , {Enter}
     } else if WinExist("ahk_group fatalError2WindowDefinition") {
         writeToLog("slapping down fatal error popup 2")
         ControlSend, , !n
@@ -145,9 +148,18 @@ Loop{
         ControlSend, , !n
     } else if WinExist("ahk_group drawingFileNotValidWindowDefinition") {
         writeToLog("slapping down drawingFileNotValid popup")
-        ControlSend, ,{Enter}
+        ControlSend, , {Enter}
         WinWaitClose
         forcefullyKillAcad()
+    } else if WinExist("ahk_group openDrawingErrorsFoundWindowDefinition") {
+        writeToLog("slapping down openDrawingErrorsFound popup")
+        ControlSend, , !n
+        ; there are two types of slapdown cases: one where our slapping down 
+        ; will simply facilitate acad's inevitable death so we can cut our losses
+        ; and mvoe on to the next file to be processed, and another where our slapping down 
+        ; will goad autocad into continue with the processing. 
+        ; this is noe of the latter. 
+    
     } else { 
         writeToLog(""
             . "encountered an unexpected condition: "
@@ -299,7 +311,8 @@ writeToLog  "pathOfPopupSlapdownScriptFile:                      $pathOfPopupSla
 writeToLog  "pathOfWorkingDirectoryInWhichToRunAcad:             $pathOfWorkingDirectoryInWhichToRunAcad"
 writeToLog  "PSScriptRoot:                                       $PSScriptRoot"
 writeToLog  "PSVersionTable.PSVersion:                           $($PSVersionTable.PSVersion)"
-writeToLog  "skipToOrdinal:                                      $skipToOrdinal"
+writeToLog  "skipToOrdinal:                                      $skipToOrdinal"     
+writeToLog  "doObscureNonactiveDwgFiles:                         $doObscureNonactiveDwgFiles"     
 
 
 # obscuringSuffix is a a a suffix that we can stick on the file extension to effectively hide the file from autocad, 
@@ -326,20 +339,40 @@ $pathsOfDwgFilesToProcess = @(
 
 # $pathsOfDwgFilesToProcess will always contain the unobscured form of the paths.
 
-writeToLog  "We will now process $($pathsOfDwgFilesToProcess.length) dwg files."
+
+# writeToLog  "We will now process $($pathsOfDwgFilesToProcess.length) dwg files."
+$message = "We will now process $($pathsOfDwgFilesToProcess.length) dwg files: "
+for ($i=0; $i -lt $pathsOfDwgFilesToProcess.length; $i++){
+    $message = $message + "`n"
+    $message = $message + "    file " + ($i + 1) + ": " + $pathsOfDwgFilesToProcess[$i]
+}
+writeToLog  $message
+
 
 
 if($pathsOfDwgFilesToProcess){
-    
+    $overallStartTime = Get-Date
+    $countOfProcessedFiles = 0
+
     if ($doObscureNonactiveDwgFiles){
         writeToLog  "Now ensuring that all dwg files are obscured."
-        foreach ($pathOfDwgFileToProcess in $pathsOfDwgFileToProcess) {obscure($pathOfDwgFileToProcess)}
+        foreach ($pathOfDwgFileToProcess in $pathsOfDwgFilesToProcess) {obscure($pathOfDwgFileToProcess)}
     }
 
     
     
-    sweepAcadErrFileToOurLog
+    sweepAcadErrFileToOurLog 
     
+    # it would be better to just delete any existing
+    # error file rather than sweeping it to our log, because the error file, if
+    # it exists, would not be related to what we are doing in this invokaction
+    # of the script, because we have not yet run autocad (in this invokation).
+    # the goal is to get rid of any existing error file toa void inadvertently
+    # sweeping an old, irrelevant, error file into our log with the calls to
+    # sweepAcadErrFileToOurLog, below.
+    # but betterr to sweep here then to do nothing at all to delete any existing error file.
+
+
     writeToLog  "Now starting the popup slapdown script"
     Start-Process -FilePath $pathOfPopupSlapdownScriptFile
     
@@ -347,7 +380,7 @@ if($pathsOfDwgFilesToProcess){
     setRegistryValueInAllAcadProfiles -relativePathAndName "Variables\STARTUP" -value "0"
     setRegistryValueInAllAcadProfiles -relativePathAndName "Variables\STARTMODE" -value "0"
 
-    writeToLog  "Now setting up autocad logging."
+    writeToLog  "Now running the autoCAD setup script."
     # Start-Process -Wait -FilePath $pathOfAcadExecutable -ArgumentList @("/b", "`"$pathOfSetupScriptFile`"")
     
     $s = @{
@@ -427,8 +460,12 @@ if($pathsOfDwgFilesToProcess){
             sweepAcadErrFileToOurLog
             if ($doObscureNonactiveDwgFiles){obscure($pathOfDwgFileToProcess)}
             
+
+            
             $endTime = Get-Date
             writeToLog "finished processing in $([math]::Round($($endTime - $startTime).TotalSeconds)) seconds: $pathOfDwgFileToProcess"
+
+            $countOfProcessedFiles = $countOfProcessedFiles + 1
         }
     }
 
@@ -436,8 +473,13 @@ if($pathsOfDwgFilesToProcess){
 
     if ($doObscureNonactiveDwgFiles){
         writeToLog  "Now ensuring that all dwg files are non-obscured."
-        foreach ($pathOfDwgFileToProcess in $pathsOfDwgFileToProcess) {unobscure($pathOfDwgFileToProcess)}
+        foreach ($pathOfDwgFileToProcess in $pathsOfDwgFilesToProcess) {unobscure($pathOfDwgFileToProcess)}
     }
+
+    $overallEndTime = Get-Date
+
+    writeToLog "processed $countOfProcessedFiles files in $([math]::Round($($overallEndTime - $overallStartTime).TotalSeconds)) seconds."
+
 }
 
 writeToLog  "finished"
@@ -458,3 +500,4 @@ writeToLog  "finished"
 # - "Saving the drawing will update any AEC objects in it to the current version
 #   which will be incompatible with earlier versions."
 # - "The sheet set association has been lost. What do you want to do?"
+
