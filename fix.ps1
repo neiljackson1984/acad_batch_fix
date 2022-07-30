@@ -1,27 +1,35 @@
 #!pwsh
 
-
-
-$pathOfAcadExecutable = join-path $env:ProgramFiles "Autodesk/AutoCAD 2018/acad.exe"
-$pathOfDirectoryInWhichToSearchForDwgFiles='C:\bms'
-$pathOfWorkingDirectoryInWhichToRunAcad=$PSScriptRoot
-
-$skipToOrdinal = $null
-# a hack for resuming our place in the sequence, intended for use in debugging.
-# unassign or set to $null to to not skip anything
-
-
 # override some of the default parameters, on Neil's machine only:
 if($env:computername -match "AUTOSCAN-WK07W7"){
     $pathOfAcadExecutable = join-path $env:ProgramFiles "Autodesk\AutoCAD 2023\acad.exe"
+    $pathOfAcadCoreConsoleExecutable = join-path $env:ProgramFiles "Autodesk\AutoCAD 2023\accoreconsole.exe"
     # $pathOfDirectoryInWhichToSearchForDwgFiles='J:\Nakano\2022-02-08_projectwise_aec_acad_troubleshoot\testroot'
     $pathOfDirectoryInWhichToSearchForDwgFiles='C:\work\nakano_marginal_way'
-} 
+} else {
+    $pathOfAcadExecutable = join-path $env:ProgramFiles "Autodesk/AutoCAD 2018/acad.exe"
+    $pathOfAcadCoreConsoleExecutable = join-path $env:ProgramFiles "Autodesk/AutoCAD 2018/accoreconsole.exe"
+    $pathOfDirectoryInWhichToSearchForDwgFiles='C:\bms'    
+}
 
 
+$pathOfWorkingDirectoryInWhichToRunAcad=$PSScriptRoot
 
 # $pathOfLogFile = (join-path $env:TEMP $MyInvocation.MyCommand.Name) + ".log"
 $pathOfLogFile = (join-path $pathOfDirectoryInWhichToSearchForDwgFiles $MyInvocation.MyCommand.Name) + ".log"
+
+$skipToOrdinal = $null
+# $skipToOrdinal = 235
+# a hack for resuming our place in the sequence, intended for use in debugging.
+# unassign or set to $null to to not skip anything
+
+$doObscureNonactiveDwgFiles = $True
+
+
+
+
+
+
 function writeToLog($x){
     $stringToAppend = "$(Get-Date -Format "yyyy/MM/dd HH:mm:ss"): $x"
     Add-Content -Path $pathOfLogFile -Value "$stringToAppend"
@@ -54,28 +62,139 @@ writeToLog "pathOfLogFile: $pathOfLogFile"
 
 
 $pathOfTemporaryAcadConsoleLogDirectory = join-path $env:TEMP ((New-Guid).Guid)
+$pathOfTemporarySlapdownLogDirectory = join-path $env:TEMP ((New-Guid).Guid)
+$pathOfStdoutCollectorFile = join-path $env:TEMP ((New-Guid).Guid)
+$pathOfStderrCollectorFile = join-path $env:TEMP ((New-Guid).Guid)
 
-function sweepAcadConsoleLogToOurLog(){
-    writeToLog "sweeping acad console logs"
-    foreach($acadConsoleLogFile in (Get-ChildItem -Path $pathOfTemporaryAcadConsoleLogDirectory -File -Recurse )){
-        writeToLog "content of $($acadConsoleLogFile.FullName):`n$(Get-Content -Raw -Path $acadConsoleLogFile.FullName)"
-        Remove-Item -Path $acadConsoleLogFile.FullName 
-    }
-}
-
-function sweepAcadErrFileToOurLog(){
-    writeToLog "sweeping acad err file"
-    $pathOfAcadErrFile=Join-Path $pathOfWorkingDirectoryInWhichToRunAcad "acad.err"
-    if(Test-Path -Path $pathOfAcadErrFile -PathType Leaf){
-        writeToLog "content of $($pathOfAcadErrFile):`n$(Get-Content -Raw -Path $pathOfAcadErrFile)"
-        Remove-Item -Path $pathOfAcadErrFile
-    } else {
-        writeToLog "hooray!  $pathOfAcadErrFile does not exist."
-    }
-}
 
 
 New-Item -ItemType "directory" -Path $pathOfTemporaryAcadConsoleLogDirectory | Out-Null
+New-Item -ItemType "directory" -Path $pathOfTemporarySlapdownLogDirectory    | Out-Null
+
+
+
+
+
+function flushAcadConsoleLog(){
+    $returnValue = ""
+    foreach($logFile in (Get-ChildItem -Path $pathOfTemporaryAcadConsoleLogDirectory -File -Recurse )){
+        $returnValue += (Get-Content -Raw -Path $logFile.FullName)
+        Remove-Item -Path $logFile.FullName  | Out-Null
+    }
+    $returnValue
+}
+
+function sweepAcadConsoleLogToOurLog(){
+    # foreach($logFile in (Get-ChildItem -Path $pathOfTemporaryAcadConsoleLogDirectory -File -Recurse )){
+    #     writeToLog "content of $($logFile.FullName):`n$(Get-Content -Raw -Path $logFile.FullName)"
+    #     Remove-Item -Path $logFile.FullName 
+    # }
+
+    # writeToLog (flushAcadConsoleLog)
+    writeToLog "acad console log: `n$(indent (flushAcadConsoleLog) -doLineNumbers $true)"
+}
+
+
+
+
+function flushSlapdownLog(){
+    $returnValue = ""
+    foreach($logFile in (Get-ChildItem -Path $pathOfTemporarySlapdownLogDirectory -File -Recurse )){
+        $returnValue += (Get-Content -Raw -Path $logFile.FullName)
+        Remove-Item -Path $logFile.FullName | Out-Null
+    }
+    $returnValue
+}
+
+function sweepSlapdownLogToOurLog(){
+    # foreach($logFile in (Get-ChildItem -Path $pathOfTemporarySlapdownLogDirectory -File -Recurse )){
+    #     writeToLog "content of $($logFile.FullName):`n$(Get-Content -Raw -Path $logFile.FullName)"
+    #     Remove-Item -Path $logFile.FullName 
+    # }
+
+    # writeToLog "sweeping slapdown logs"
+    # writeToLog (flushSlapdownLog)
+    writeToLog "slapdown log: `n$(indent (flushSlapdownLog) -doLineNumbers $true)"
+}
+
+function flushAcadErrFile(){
+    $returnValue = ""
+    $pathOfAcadErrFile=Join-Path $pathOfWorkingDirectoryInWhichToRunAcad "acad.err"
+    if(Test-Path -Path $pathOfAcadErrFile -PathType Leaf){
+        $returnValue += (Get-Content -Raw -Path $pathOfAcadErrFile)
+        Remove-Item -Path $pathOfAcadErrFile | Out-Null
+    }
+    $returnValue
+}
+
+
+function sweepAcadErrFileToOurLog(){
+    # writeToLog "sweeping acad err file"
+    # writeToLog (flushAcadErrFile)
+
+    writeToLog "acad err file content: `n$(indent (flushAcadErrFile) -doLineNumbers $true)"
+}
+
+function flushStdOutCollectorFile(){
+    $returnValue = ""
+    if(Test-Path -Path $pathOfStdoutCollectorFile -PathType Leaf){
+        $returnValue += (Get-Content -Raw -Encoding unicode -Path $pathOfStdoutCollectorFile)
+        Remove-Item -Path $pathOfStdoutCollectorFile | Out-Null
+    }
+    $returnValue
+}
+
+function flushStdErrCollectorFile(){
+    $returnValue = ""
+    if(Test-Path -Path $pathOfStderrCollectorFile -PathType Leaf){
+        $returnValue += (Get-Content -Raw -Encoding unicode -Path $pathOfStderrCollectorFile)
+        Remove-Item -Path $pathOfStderrCollectorFile | Out-Null
+    }
+    $returnValue
+}
+
+function sweepStandardStreamCollectorFilesToOurLog(){
+    writeToLog "content of stdout collector file:`n$(indent (flushStdOutCollectorFile) -doLineNumbers $true)"
+    writeToLog "content of stderr collector file:`n$(indent (flushStdErrCollectorFile) -doLineNumbers $true)"
+}
+
+function toHumanReadableDataSize($byteCount){
+    $formatString = '{0:N0} kilobytes'
+    
+    $formatString -f ($byteCount/([Math]::Pow(10,3)))
+}
+
+function splitStringIntoLines($s){
+    # $startTime=Get-Date
+    @($s -split "\r?\n")
+    # @($s -split "\n")
+    # $endTime=Get-Date
+    # writeToLog "splitting took $(($endTime - $startTime).TotalSeconds) seconds"
+}
+
+function indent($x, $indentLevel=1, $doLineNumbers=$false){
+    # $startTime=Get-Date
+    $returnValue = ""
+    $tabString = "    "
+    # foreach($line in (splitStringIntoLines $x)){
+    #     $returnValue += ($tabString + $line + "`n")
+    # }
+    $lines = splitStringIntoLines $x
+
+    if($doLineNumbers){
+        $i = 1
+        $lineNumberFieldWidth = "$($lines.Count)".Length
+        $lineNumberFormattingString = "{0,$($lineNumberFieldWidth):}"
+        $returnValue = ( @( $lines | foreach-object { $tabString + ( $lineNumberFormattingString -f ($i++) ) + ": " + $_} ) -join "`n" )       
+    } else {
+        $returnValue = (@( $lines | foreach-object {$tabString + $_} ) -join "`n")
+    }
+    
+
+    # $endTime=Get-Date
+    # writeToLog "indenting took $(($endTime - $startTime).TotalSeconds) seconds"
+    $returnValue
+}
 
 $popupSlapdownScriptContent = @"
 #SingleInstance, Force
@@ -186,10 +305,9 @@ Loop{
     ; a bit of delay for good measure.
 }
 
-
-
 writeToLog(message){
-    logFile:="$pathOfLogFile"
+    ; logFile:="$pathOfLogFile"
+    logFile:="$($pathOfTemporarySlapdownLogDirectory)/" . A_ScriptName . ".log"
     timestampFormat:="yyyy/MM/dd HH:mm:ss"
     FormatTime, now,,%timestampFormat%
     FileAppend, %now%: %A_ScriptName% : %message%``n,%logFile%
@@ -207,6 +325,8 @@ Set-Content -NoNewLine -Encoding ascii -Path $pathOfPopupSlapdownScriptFile -Val
 
 
 $businessScriptContent = @"
+LOGFILEMODE 1
+LOGFILEPATH $pathOfTemporaryAcadConsoleLogDirectory
 audit Y
 -purge regapps * N
 -purge all * N
@@ -219,6 +339,7 @@ Set-Content -NoNewLine -Encoding ascii -Path $pathOfBusinessScriptFile -Value $b
 
 $setupScriptContent = @"
 EXPERT 5
+SSMAUTOOPEN 0
 DEMANDLOAD 2
 SAVETIME 0
 FILEDIA 0
@@ -236,11 +357,11 @@ Set-Content -NoNewLine -Encoding ascii -Path $pathOfSetupScriptFile -Value $setu
 
 
 
-$doObscureNonactiveDwgFiles = $True
+
 $obscuringSuffix="220d09e398c24"
 $dwgExtension=".dwg"
-$nonobscuredDwgExtension=$dwgExtension
-$obscuredDwgExtension="$($nonobscuredDwgExtension)$obscuringSuffix"
+
+# $obscuredDwgExtension="$($nonobscuredDwgExtension)$obscuringSuffix"
 # "obscuring" means changing the file extension of any file that we want to
 # prevent AutoCAD from loading. Setting the doObscureNonactiveDwgFiles flag
 # causes us to always (during the processing) keep all dwg files obscured except
@@ -298,11 +419,253 @@ function unobscure($pathOfFile){
     Move-Item (getObscuredPath $pathOfFile) (getUnobscuredPath $pathOfFile) -ErrorAction SilentlyContinue
 }
 
+function startAcadProcess($argumentList, $pathOfScriptFile=$null, $pathOfDwgFile=$null, $additionalArgs=$null, $strategy=$null){
+    
+    if($null -eq $strategy){
+        # $strategy = "guiAcad"
+        $strategy = "accoreconsole"
+        # $strategy = "accoreconsole_with_embedded_open_command"
+    }
+    
+    
+    $argumentList = @()
+    $s = @{}
 
 
+    if($strategy -eq "guiAcad"){
+        
+        $argumentList += "/nologo"
+        $argumentList += "/nossm"
+        if($null -ne $pathOfScriptFile){
+            $argumentList +=  @("/b", "`"$pathOfScriptFile`"")
+        }
+        if($null -ne $pathOfDwgFile){
+            $argumentList +=  "`"$pathOfDwgFile`""
+        }
+        if($null -ne $additionalArgs){
+            $argumentList +=  $additionalArgs
+        }
+        
+        $s['FilePath']=$pathOfAcadExecutable 
+        $s['WorkingDirectory']=$pathOfWorkingDirectoryInWhichToRunAcad
+        $s['WindowStyle']="Minimized"
+
+        # $s['WindowStyle']="Hidden"
+        
+    } elseif($strategy -eq "accoreconsole"){
+        if($null -ne $pathOfScriptFile){
+            $argumentList +=  @("/s", "`"$pathOfScriptFile`"")
+        }
+        if($null -ne $pathOfDwgFile){
+            $argumentList +=  @( "/i", "`"$pathOfDwgFile`"")
+        }
+        if($null -ne $additionalArgs){
+            $argumentList +=  $additionalArgs
+        }
+        $s['FilePath']=$pathOfAcadCoreConsoleExecutable 
+        
+        # $s['WorkingDirectory']=$pathOfWorkingDirectoryInWhichToRunAcad
+        $s['WorkingDirectory']=$pathOfTemporaryAcadConsoleLogDirectory
+        # Ithink accoreconsole insists on writing logs to the working directory. 
+        # perhaps we should be capturing stdout and stderr instead of sweeping a log file.
+        # $s['WindowStyle']="Minimized"
+        # $s['WindowStyle']="Hidden"
+        $s['NoNewWindow'] = 1
+        
+    } elseif($strategy -eq "accoreconsole_with_embedded_open_command"){
+        $pathOfModifiedScriptFile = join-path $env:TEMP ((New-Guid).Guid + ".scr")
+        $modifiedScriptContent = ""
+
+        if($null -ne $pathOfScriptFile){
+            # $argumentList +=  @("/s", "`"$pathOfModifiedScriptFile`"")
+            $s['RedirectStandardInput'] = $pathOfModifiedScriptFile
+        }
+        if($null -ne $pathOfDwgFile){
+            $modifiedScriptContent = "OPEN $pathOfDwgFile" + "`r`n"
+        }
+        if($null -ne $additionalArgs){
+            $argumentList +=  $additionalArgs
+        }
+        $modifiedScriptContent += (Get-Content -Raw -Path $pathOfScriptFile)
+        Set-Content -NoNewLine -Encoding ascii -Path $pathOfModifiedScriptFile -Value $modifiedScriptContent
+
+        $s['FilePath']=$pathOfAcadCoreConsoleExecutable 
+        
+        # $s['WorkingDirectory']=$pathOfWorkingDirectoryInWhichToRunAcad
+        $s['WorkingDirectory']=$pathOfTemporaryAcadConsoleLogDirectory
+        # Ithink accoreconsole insists on writing logs to the working directory. 
+        # perhaps we should be capturing stdout and stderr instead of sweeping a log file.
+        # $s['WindowStyle']="Minimized"
+        # $s['WindowStyle']="Hidden"
+        $s['NoNewWindow'] = 1
+        
+    } else {
+        writeToLog "unrecognized strategy: $strategy"
+    }
+    
+    # $s = @{
+    #     FilePath=$pathOfAcadCoreConsoleExecutable 
+    #     ArgumentList = $argumentList + @(
+    #         "/nologo",
+    #         "/nossm"
+    #         # both nossm and nologo are an attempt to minimize acad from stealing focus.
+    #     )
+    #     WorkingDirectory=$pathOfWorkingDirectoryInWhichToRunAcad
+    #     #  WindowStyle="Minimized"
+    #     WindowStyle="Hidden"
+    # }; 
+    $s['ArgumentList'] = $argumentList 
+    $s['RedirectStandardOutput']=$pathOfStdoutCollectorFile
+    $s['RedirectStandardError']=$pathOfStderrCollectorFile
+    Set-Content -NoNewLine -Encoding ascii -Path $pathOfStdoutCollectorFile -Value ""
+    Set-Content -NoNewLine -Encoding ascii -Path $pathOfStderrCollectorFile -Value ""
+    writeToLog ("command: `"$($s['FilePath'])`" $($argumentList -join " ")")
+    $process = Start-Process -PassThru @s 
+    $process
+}
+
+
+function processSingleDwgFile($pathOfDwgFileToProcess, $pathsOfDwgFilesToObscure){
+    #returns a dwgProcessingResult object
+
+
+    $acadConsoleLogFileContent   = ""
+    $acadErrFileContent          = ""
+    $stdErrContent               = ""
+    $stdOutContent               = ""
+    $slapdownLogFileContent      = ""
+
+     
+
+
+    writeToLog  "Now working on dwg file $pathOfDwgFileToProcess"
+    $processingDuration          = (New-TimeSpan )        
+            
+    if ($doObscureNonactiveDwgFiles){
+        foreach ($pathOfDwgFile in $pathsOfDwgFilesToObscure){obscure($pathOfDwgFile)}
+        unobscure($pathOfDwgFileToProcess)
+    }
+
+    # clear the read-only flag, if it is present, to avoid AutoCAD prompting about opening read only
+    $isReadOnly = (Get-ItemProperty -Path $pathOfDwgFileToProcess -Name IsReadOnly).IsReadOnly
+    # writeToLog ("isReadOnly: $isReadOnly")
+    If ($isReadOnly){
+        writeToLog ("clearing the readOnly flag on $pathOfDwgFileToProcess")
+        Set-ItemProperty -Path $pathOfDwgFileToProcess -Name IsReadOnly -Value $false
+    }
+            
+    $initialFileSize = (Get-Item $pathOfDwgFileToProcess).length
+    $initialFileHash = (Get-FileHash -Algorithm SHA1 $pathOfDwgFileToProcess).Hash
+    
+    $startTime = Get-Date        
+    $process = startAcadProcess -pathOfScriptFile $pathOfBusinessScriptFile -pathOfDwgFile $pathOfDwgFileToProcess
+    $process | Wait-Process
+    $endTime = Get-Date
+    $processingDuration += $endTime - $startTime
+
+    # give some time for autohotkey slapdowns to finish forcefully killing acad (useful in case of fatal error)
+    Start-Sleep -Seconds 1
+
+    $acadConsoleLogFileContent += (flushAcadConsoleLog)
+    $stdErrContent             += (flushStdErrCollectorFile)
+    $stdOutContent             += (flushStdOutCollectorFile)
+    $slapdownLogFileContent    += (flushSlapdownLog)
+    $acadErrFileContent        += (flushAcadErrFile)
+
+    
+    $finalFileSize = (Get-Item $pathOfDwgFileToProcess).length
+    $finalFileHash = (Get-FileHash -Algorithm SHA1 $pathOfDwgFileToProcess).Hash
+
+    if ($initialFileHash -eq $finalFileHash){
+        writeToLog "The first attempt at processing the file produced no change.  Therefore, we will try again in a different way."
+
+        $startTime = Get-Date   
+        $process = startAcadProcess -pathOfScriptFile $pathOfBusinessScriptFile -pathOfDwgFile $pathOfDwgFileToProcess -strategy "guiAcad"
+        $process | Wait-Process
+        $endTime = Get-Date
+        $processingDuration += $endTime - $startTime
+
+        # wait for autohotkey slapdowns to finish forcefully killing acad (useful in case of fatal error)
+        Start-Sleep -Seconds 3
+
+        $acadConsoleLogFileContent += "`n" + (flushAcadConsoleLog)
+        $stdErrContent             += "`n" + (flushStdErrCollectorFile)
+        $stdOutContent             += "`n" + (flushStdOutCollectorFile)
+        $slapdownLogFileContent    += "`n" + (flushSlapdownLog)
+        $acadErrFileContent        += "`n" + (flushAcadErrFile)
+        
+        $finalFileSize = (Get-Item $pathOfDwgFileToProcess).length
+        $finalFileHash = (Get-FileHash -Algorithm SHA1 $pathOfDwgFileToProcess).Hash
+    }
+
+
+    if ($doObscureNonactiveDwgFiles){
+        foreach ($pathOfDwgFile in $pathsOfDwgFilesToObscure){unobscure($pathOfDwgFile)}
+        unobscure($pathOfDwgFileToProcess)
+    }
+
+    # writeToLog "finished processing file $($i + 1) in $([math]::Round($($endTime - $startTime).TotalSeconds)) seconds: $pathOfDwgFileToProcess"
+    
+    # writeToLog ("file $($i + 1) size " + "$(if($finalFileSize -eq $initialFileSize){ "remained constant at $(toHumanReadableDataSize $initialFileSize) ."  } else {"changed from $(toHumanReadableDataSize $initialFileSize) to $(toHumanReadableDataSize $finalFileSize) ."})")
+    # if ($initialFileHash -eq $finalFileHash){
+    #     writeToLog "file $($i +1) did not change.  hash remained constant at $initialFileHash"
+    # } else {
+    #     writeToLog "file $($i +1) hash changed from $initialFileHash to $finalFileHash"
+    # }
+
+    $returnValue = [PSCustomObject]@{
+        pathOfDwgFile              = $pathOfDwgFileToProcess
+        acadConsoleLogFileContent  = $acadConsoleLogFileContent
+        acadErrFileContent         = $acadErrFileContent
+        stdErrContent              = $stdErrContent
+        stdOutContent              = $stdOutContent
+        slapdownLogFileContent     = $slapdownLogFileContent
+        processingDuration         = $processingDuration
+        initialFileSize            = $initialFileSize
+        finalFileSize              = $finalFileSize
+        initialFileHash            = $initialFileHash
+        finalFileHash              = $finalFileHash
+    }      
+    $returnValue
+}
+
+
+function processingResultToReport($result, $i){
+    $m = ""
+
+    $m += "file $($i + 1) processingDuration:  "
+    $m += "$([math]::Round($result.processingDuration.TotalSeconds)) seconds." + "`n"
+
+    $m += "file $($i + 1) size:                "
+    $m += "$(
+        if($result.finalFileSize -eq $result.initialFileSize){
+            "remained constant at $(toHumanReadableDataSize $result.initialFileSize) ."  
+        } else {
+            "changed from $(toHumanReadableDataSize $result.initialFileSize) " `
+            + "to $(toHumanReadableDataSize $result.finalFileSize) ."
+        }
+    )" + "`n"
+
+    $m += "file $($i + 1) hash:                " 
+    $m += "$(
+        if($result.finalFileHash -eq $result.initialFileHash){ 
+            "remained constant at $($result.initialFileHash) ."  
+        } else {
+            "changed from $($result.initialFileHash) to $($result.finalFileHash) ."
+        }
+    )" + "`n"
+
+    $m +=  "file $($i + 1) acadConsoleLogFileContent:`n$(indent $result.acadConsoleLogFileContent -doLineNumbers $true)" + "`n"
+    $m +=  "file $($i + 1) acadErrFileContent:`n$(indent $result.acadErrFileContent -doLineNumbers $true)" + "`n"
+    $m +=  "file $($i + 1) stdOutContent:`n$(indent $result.stdOutContent -doLineNumbers $true)" + "`n"
+    $m +=  "file $($i + 1) stdErrContent:`n$(indent $result.stdErrContent -doLineNumbers $true)" + "`n"
+    $m +=  "file $($i + 1) slapdownLogFileContent:`n$(indent $result.slapdownLogFileContent -doLineNumbers $true)" + "`n"
+    $m
+}
 
 
 writeToLog  "pathOfAcadExecutable:                               $pathOfAcadExecutable"
+writeToLog  "pathOfAcadCoreConsoleExecutable:                    $pathOfAcadCoreConsoleExecutable"
 writeToLog  "pathOfDirectoryInWhichToSearchForDwgFiles:          $pathOfDirectoryInWhichToSearchForDwgFiles"
 writeToLog  "pathOfTemporaryAcadConsoleLogDirectory:             $pathOfTemporaryAcadConsoleLogDirectory"
 writeToLog  "pathOfBusinessScriptFile:                           $pathOfBusinessScriptFile"
@@ -313,6 +676,10 @@ writeToLog  "PSScriptRoot:                                       $PSScriptRoot"
 writeToLog  "PSVersionTable.PSVersion:                           $($PSVersionTable.PSVersion)"
 writeToLog  "skipToOrdinal:                                      $skipToOrdinal"     
 writeToLog  "doObscureNonactiveDwgFiles:                         $doObscureNonactiveDwgFiles"     
+writeToLog  "pathOfStdoutCollectorFile:                          $pathOfStdoutCollectorFile"     
+writeToLog  "pathOfStderrCollectorFile:                          $pathOfStderrCollectorFile"     
+writeToLog  "setupScriptContent:`n$(indent $setupScriptContent -doLineNumbers $true)"     
+writeToLog  "businessScriptContent:`n$(indent $businessScriptContent -doLineNumbers $true)"     
 
 
 # obscuringSuffix is a a a suffix that we can stick on the file extension to effectively hide the file from autocad, 
@@ -353,6 +720,11 @@ writeToLog  $message
 if($pathsOfDwgFilesToProcess){
     $overallStartTime = Get-Date
     $countOfProcessedFiles = 0
+    $totalInitialFileSize = 0
+    $totalFinalFileSize = 0
+    $totalFirstPassProcessingDuration = New-TimeSpan
+    $totalSecondPassProcessingDuration = New-TimeSpan
+
 
     if ($doObscureNonactiveDwgFiles){
         writeToLog  "Now ensuring that all dwg files are obscured."
@@ -381,22 +753,14 @@ if($pathsOfDwgFilesToProcess){
     setRegistryValueInAllAcadProfiles -relativePathAndName "Variables\STARTMODE" -value "0"
 
     writeToLog  "Now running the autoCAD setup script."
-    # Start-Process -Wait -FilePath $pathOfAcadExecutable -ArgumentList @("/b", "`"$pathOfSetupScriptFile`"")
+    $process = startAcadProcess -pathOfScriptFile $pathOfSetupScriptFile
     
-    $s = @{
-        FilePath=$pathOfAcadExecutable 
-        ArgumentList=@(
-            "/b", "`"$pathOfSetupScriptFile`""
-            "/nologo"
-        )
-        WorkingDirectory=$pathOfWorkingDirectoryInWhichToRunAcad
-        WindowStyle="Minimized"
-    }; 
-    $process = Start-Process -PassThru @s 
     # Write-Host "process: ";    $process | fl
     $process | Wait-Process
     sweepAcadConsoleLogToOurLog   
     sweepAcadErrFileToOurLog
+    sweepSlapdownLogToOurLog
+    sweepStandardStreamCollectorFilesToOurLog
 
 
 
@@ -405,65 +769,27 @@ if($pathsOfDwgFilesToProcess){
     for ($i=0; $i -lt $pathsOfDwgFilesToProcess.length; $i++){
         if ( ($skipToOrdinal -ne $null)  -and ( ($i + 1) -lt  $skipToOrdinal)  ){
             writeToLog "skipping until we reach ordinal $skipToOrdinal"
-        } else {
-        
-            $startTime = Get-Date
-            
+        } else {          
             $pathOfDwgFileToProcess = $pathsOfDwgFilesToProcess[$i]
             writeToLog  "Now working on dwg file $($i + 1) of $($pathsOfDwgFilesToProcess.length): $pathOfDwgFileToProcess"
+
+            $result1 = (processSingleDwgFile -pathOfDwgFileToProcess $pathOfDwgFileToProcess -pathsOfDwgFilesToObscure $pathsOfDwgFilesToProcess)
+            writeToLog "file $($i + 1) first pass processing report:  `n$(indent (processingResultToReport $result1 $i))"
+
+            $result2 = (processSingleDwgFile -pathOfDwgFileToProcess $pathOfDwgFileToProcess -pathsOfDwgFilesToObscure $pathsOfDwgFilesToProcess)
+            writeToLog "file $($i + 1) second pass processing report:  `n$(indent (processingResultToReport $result2 $i))"
             
-            
-            if ($doObscureNonactiveDwgFiles){unobscure($pathOfDwgFileToProcess)}
-            
-            # & cmd /c "$pathOfAcadExecutable" "$pathOfDwgFileToProcess" /b "$pathOfScriptFile"
-            
-            # clear the read-only flag, if it is present, to avoid AutoCAD prompting about opening read only
+            $totalInitialFileSize += $result1.initialFileSize
+            $totalFinalFileSize += $result2.finalFileSize
+            $totalFirstPassProcessingDuration += $result1.processingDuration
+            $totalSecondPassProcessingDuration += $result2.processingDuration
 
-            $isReadOnly = (Get-ItemProperty -Path $pathOfDwgFileToProcess -Name IsReadOnly).IsReadOnly
-            # writeToLog ("isReadOnly: $isReadOnly")
-            If ($isReadOnly){
-                writeToLog ("clearing the readOnly flag on $pathOfDwgFileToProcess")
-                Set-ItemProperty -Path $pathOfDwgFileToProcess -Name IsReadOnly -Value $false
-            }
+            $changeInProcessingDuration = ($result2.processingDuration - $result1.processingDuration)
 
-
-
-            # Start-Process -Wait -FilePath $pathOfAcadExecutable -ArgumentList @("`"$pathOfDwgFileToProcess`"", "/b", "`"$pathOfBusinessScriptFile`"")
-            # $s = @{
-            #     Wait=1
-            #     FilePath=$pathOfAcadExecutable 
-            #     ArgumentList=@("`"$pathOfDwgFileToProcess`"", "/b", "`"$pathOfBusinessScriptFile`"")
-            #     WorkingDirectory=$pathOfWorkingDirectoryInWhichToRunAcad
-            # }; 
-            # $process = Start-Process @s
-            
-
-            
-            $s = @{
-                FilePath=$pathOfAcadExecutable 
-                ArgumentList=@(
-                    "`"$pathOfDwgFileToProcess`"", 
-                    "/b", "`"$pathOfBusinessScriptFile`"",
-                    "/nologo"
-                )
-                WorkingDirectory=$pathOfWorkingDirectoryInWhichToRunAcad
-                WindowStyle="Minimized"
-            }; 
-            $process = Start-Process -PassThru @s 
-            $process | Wait-Process
-
-
-            # wait for autohotkey slapdowns to finish forcefully killing acad (useful in case of fatal error)
-            Start-Sleep -Seconds 3
-
-            sweepAcadConsoleLogToOurLog   
-            sweepAcadErrFileToOurLog
-            if ($doObscureNonactiveDwgFiles){obscure($pathOfDwgFileToProcess)}
-            
-
-            
-            $endTime = Get-Date
-            writeToLog "finished processing in $([math]::Round($($endTime - $startTime).TotalSeconds)) seconds: $pathOfDwgFileToProcess"
+            $m = "" 
+            $m += "file $($i + 1) change in processingDuration:  "
+            $m += "$([math]::Round( $changeInProcessingDuration.TotalSeconds )) seconds." + "`n"
+            writeToLog $m
 
             $countOfProcessedFiles = $countOfProcessedFiles + 1
         }
@@ -479,7 +805,8 @@ if($pathsOfDwgFilesToProcess){
     $overallEndTime = Get-Date
 
     writeToLog "processed $countOfProcessedFiles files in $([math]::Round($($overallEndTime - $overallStartTime).TotalSeconds)) seconds."
-
+    writeToLog "size of processed files changed from $(toHumanReadableDataSize $totalInitialFileSize) to $(toHumanReadableDataSize $totalFinalFileSize) ."
+    writeToLog "between first and second passes, total processing duration changed from $([math]::Round($totalFirstPassProcessingDuration.TotalSeconds)) seconds to $([math]::Round($totalSecondPassProcessingDuration.TotalSeconds)) seconds ."
 }
 
 writeToLog  "finished"

@@ -24,3 +24,35 @@
 
 2022-07-25-1147:
  Now will run the script on the results of the last run, to compare processing speed.
+ First, do:
+ git -C "C:/work/nakano_marginal_way" reset --hard; git -C "C:/work/nakano_marginal_way" clean -fxd :/ ; 
+
+Then run the script:
+    env "J:/Nakano/2022-02-08_projectwise_aec_acad_troubleshoot/batch_fix/fix.ps1"
+
+regexes for log analysis:
+finished processing in \d+ seconds: .*\\wsp-us-pw-02\\d0162142\\TRC0976_X-NORTH-EC.dwg
+
+acad command line options documentation:
+https://help.autodesk.com/view/ACD/2023/ENU/?guid=GUID-8E54B6EC-5B52-4F62-B7FC-0D4E1EDF093A
+
+taskkill -t -f -im acad.exe ; taskkill -t -f -im accoreconsole.exe ;  git -C "C:/work/nakano_marginal_way" reset --hard; git -C "C:/work/nakano_marginal_way" clean -fxd :/; env "J:/Nakano/2022-02-08_projectwise_aec_acad_troubleshoot/batch_fix/fix.ps1"
+
+
+git tag -a -m "tagging just to ensure we don't lose track of this commit." "atag_$(git rev-parse --short=5 HEAD)"
+
+
+git reset --hard; git clean -fxd :/
+ rm -rf "C:/work/nakano_marginal_way_comparison/1/*"; git -C "C:/work/nakano_marginal_way" --work-tree="C:/work/nakano_marginal_way_comparison/1" checkout baseline1 -- .
+ git reset --hard; git clean -fxd :/
+ rm -rf "C:/work/nakano_marginal_way_comparison/2/*"; git -C "C:/work/nakano_marginal_way" --work-tree="C:/work/nakano_marginal_way_comparison/2" checkout HEAD^ -- .
+ git reset --hard; git clean -fxd :/
+  
+
+Strangely, one file seems not to be changed the script:
+\wsp-us-pw-02\d0339745\ver00002\TRC0975_X-PH1-TRK.dwg
+This is file 202 in my test set.
+
+taskkill -t -f -im acad.exe ; taskkill -t -f -im accoreconsole.exe ;  git -C "C:/work/nakano_marginal_way" reset --hard; git -C "C:/work/nakano_marginal_way" clean -fxd :/; rm -f "C:/work/nakano_marginal_way/fix.ps1.log"
+
+C:\work\nakano_marginal_way\wsp-us-pw-02\d0339745\ver00002\TRC0975_X-PH1-TRK.dwg

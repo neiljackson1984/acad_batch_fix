@@ -1,0 +1,102 @@
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558
+    // for the documentation about the tasks.json format
+    "version": "2.0.0",
+    "tasks": [
+        
+        // the following "fx_task" tasks are intended to be triggered by the
+        // corresponding f key. In order for this to work, you must define
+        // keybindings like the following, which you should place in vs code's
+        // keybindings.json file.: 
+        //     { "key": "f4"  ,  "command":  "workbench.action.tasks.runTask"     ,    "args": "f4_task"    }
+        // { "label": "f4_task",            "dependsOn": ["dotSourceCurrentFileToSpecialScreenSessionAndMonitorScreenSession"]                           },
+        { "label": "f4_task",            "dependsOn": ["execute_current_file"]                           },
+        { "label": "f15_task",           "dependsOn": ["dotSourceCurrentFileToSpecialScreenSessionAndMonitorScreenSession"]                           },
+
+        {   "label": "execute_current_file",
+            "type":"shell",
+            "command": "env \"${file}\"",
+            "options": {
+                // "env": {
+                //     "BW_SESSION":"${input:bw_session_input}"
+                // } ,
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            }
+        },
+
+        {   "label": "dotSourceCurrentFileToSpecialScreenSessionAndMonitorScreenSession",
+            "dependsOn": ["dotSourceCurrentFileToSpecialScreenSession", "monitorTheSpecialScreenSession"],
+            "dependsOrder": "parallel",
+        },
+
+
+        {   "label": "dotSourceCurrentFileToSpecialScreenSession",
+            "dependsOn":  ["createTheSpecialScreenSessionIfItDoesNotAlreadyExist"],
+            "dependsOrder": "sequence",
+            "type":"shell",
+            "options":{"shell": {"executable": "${config:neil.preferredBash}", "args": ["-c"]}},
+            "command": "t=\"$(mktemp)\"; echo . \"'\"'${file}'\"'\" > \"$t\"; screen -S ${config:neil.nameOfSpecialScreenSession} -X eval \"readbuf '$(cygpath --mixed $t)'\" \"paste .\"; rm \"$t\";",
+            // "command": "t=\"$(mktemp)\"; echo echo . \"'\"'${file}'\"'\" > \"$t\"; screen -S ${config:neil.nameOfSpecialScreenSession} -X eval \"readbuf '$(cygpath --mixed $t)'\" \"paste .\"; rm \"$t\";",
+            "presentation": {
+                "reveal": "silent",
+                "panel": "dedicated",
+                "close": true
+            }
+        },
+
+        {   "label": "monitorTheSpecialScreenSession",
+            "dependsOn": ["createTheSpecialScreenSessionIfItDoesNotAlreadyExist"],
+            "dependsOrder": "sequence",
+            "type": "shell",
+            "options":{"shell": {"executable": "${config:neil.preferredBash}", "args": ["-c"]}},
+            // "command": "screen -dmS ${config:neil.nameOfSpecialScreenSession} powershell; bash --rcfile <(cat ~/.bashrc; echo \"\"; echo screen -xRR -S ${config:neil.nameOfSpecialScreenSession}; echo \"\") -i ",
+            // "command": "screen -xRR -S ${config:neil.nameOfSpecialScreenSession}",
+            // "command": "'${config:neil.preferredBash}' --rcfile <(( [ -f ~/.bashrc ] && cat ~/.bashrc); echo \"\"; echo screen -xRR -S ${config:neil.nameOfSpecialScreenSession}; echo \"\") -i",
+            // "command": "${config:neil.preferredBash}",
+            // "args": [ 
+            //     "-c",
+            //     "screen -xRR -S ${config:neil.nameOfSpecialScreenSession}"
+            // ],
+            // "command": "trap \"screen -wipe neilvscodepreview\" EXIT SIGHUP SIGTERM ; screen -wipe neilvscodepreview; screen -S neilvscodepreview -c $( t=\"$(mktemp)\"; ( [ -f \"$HOME/.screenrc\" ] && cat \"$HOME/.screenrc\";  echo -e \"\\nautodetach off\\n\") > \"$t\"; echo \"$t\" ) screen -m -xRR ${config:neil.nameOfSpecialScreenSession}",
+            "command": "trap \"\" EXIT SIGHUP SIGTERM ; screen -S neilvscodepreview -c $( t=\"$(mktemp)\"; ( [ -f \"$HOME/.screenrc\" ] && cat \"$HOME/.screenrc\";  echo -e \"\\nautodetach off\\n\") > \"$t\"; echo \"$t\" ) screen -m -xRR ${config:neil.nameOfSpecialScreenSession}",
+            // I can't figure out how to (and may not be able to) set up a
+            // handler to automatically wipe dead screens when I kill the vscode
+            // integrated terminal.  
+            // to avoid the accumulation of dead screen sessions, I will at
+            // least do a wipe of the neilvscodepreview screen session before
+            // creating a new vscodepreview session.
+
+
+            "presentation": {
+                "reveal": "always",
+                "showReuseMessage": true,
+                "panel": "dedicated"
+            },
+
+            "isBackground":true,
+        },
+
+        {   "label": "createTheSpecialScreenSessionIfItDoesNotAlreadyExist",
+            "type": "shell",
+            "options":{"shell": {"executable": "${config:neil.preferredBash}", "args": ["-c"]}},
+            // "command": "screen -xRR -S ${config:neil.nameOfSpecialScreenSession} -X detach powershell"
+            "command": "screen.exe -S ${config:neil.nameOfSpecialScreenSession} -Q select . || screen -dmS ${config:neil.nameOfSpecialScreenSession} powershell",
+            // "command": "screen.exe -S ${config:neil.nameOfSpecialScreenSession} -Q select . || screen -xRR ${config:neil.nameOfSpecialScreenSession} powershell"
+            "presentation":{
+                "reveal": "silent",
+                "panel": "dedicated",
+                "close": true
+            },
+        }
+    ]
+        
+
+}
+
