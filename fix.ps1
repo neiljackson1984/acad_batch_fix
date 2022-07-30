@@ -787,7 +787,8 @@ if($pathsOfDwgFilesToProcess){
             # $changeInProcessingDuration = ($result2.processingDuration - $result1.processingDuration)
 
             $m = "" 
-            $m += "file $($i + 1) processingDuration changed from $([math]::Round( $result1.processingDuration.TotalSeconds )) seconds to $([math]::Round( $result2.processingDuration.TotalSeconds )) seconds."
+            $m += "file $($i + 1) processingDuration changed from $([math]::Round( $result1.processingDuration.TotalSeconds )) seconds to $([math]::Round( $result2.processingDuration.TotalSeconds )) seconds." + "`n"
+            $m += "file $($i + 1) size changed from $(toHumanReadableDataSize $result1.initialFileSize) to $(toHumanReadableDataSize $result2.finalFileSize) ."
             writeToLog $m
 
             $countOfProcessedFiles = $countOfProcessedFiles + 1
@@ -804,7 +805,7 @@ if($pathsOfDwgFilesToProcess){
     $overallEndTime = Get-Date
 
     writeToLog "processed $countOfProcessedFiles files in $([math]::Round($($overallEndTime - $overallStartTime).TotalSeconds)) seconds."
-    writeToLog "size of processed files changed from $(toHumanReadableDataSize $totalInitialFileSize) to $(toHumanReadableDataSize $totalFinalFileSize) ."
+    writeToLog "total size of processed files changed from $(toHumanReadableDataSize $totalInitialFileSize) to $(toHumanReadableDataSize $totalFinalFileSize) ."
     writeToLog "between first and second passes, total processing duration changed from $([math]::Round($totalFirstPassProcessingDuration.TotalSeconds)) seconds to $([math]::Round($totalSecondPassProcessingDuration.TotalSeconds)) seconds ."
 }
 
