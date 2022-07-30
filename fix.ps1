@@ -57,7 +57,7 @@ function setRegistryValueInAllAcadProfiles($relativePathAndName, $value){
 
 
 writeToLog "$($MyInvocation.MyCommand.Name) is running."
-writeToLog "pathOfLogFile: $pathOfLogFile"
+
 
 
 
@@ -663,23 +663,23 @@ function processingResultToReport($result, $i){
     $m
 }
 
-
-writeToLog  "pathOfAcadExecutable:                               $pathOfAcadExecutable"
-writeToLog  "pathOfAcadCoreConsoleExecutable:                    $pathOfAcadCoreConsoleExecutable"
-writeToLog  "pathOfDirectoryInWhichToSearchForDwgFiles:          $pathOfDirectoryInWhichToSearchForDwgFiles"
-writeToLog  "pathOfTemporaryAcadConsoleLogDirectory:             $pathOfTemporaryAcadConsoleLogDirectory"
-writeToLog  "pathOfBusinessScriptFile:                           $pathOfBusinessScriptFile"
-writeToLog  "pathOfSetupScriptFile:                              $pathOfSetupScriptFile"
-writeToLog  "pathOfPopupSlapdownScriptFile:                      $pathOfPopupSlapdownScriptFile"
-writeToLog  "pathOfWorkingDirectoryInWhichToRunAcad:             $pathOfWorkingDirectoryInWhichToRunAcad"
-writeToLog  "PSScriptRoot:                                       $PSScriptRoot"
-writeToLog  "PSVersionTable.PSVersion:                           $($PSVersionTable.PSVersion)"
-writeToLog  "skipToOrdinal:                                      $skipToOrdinal"     
-writeToLog  "doObscureNonactiveDwgFiles:                         $doObscureNonactiveDwgFiles"     
-writeToLog  "pathOfStdoutCollectorFile:                          $pathOfStdoutCollectorFile"     
-writeToLog  "pathOfStderrCollectorFile:                          $pathOfStderrCollectorFile"     
-writeToLog  "setupScriptContent:`n$(indent $setupScriptContent -doLineNumbers $true)"     
-writeToLog  "businessScriptContent:`n$(indent $businessScriptContent -doLineNumbers $true)"     
+writeToLog "pathOfLogFile:                                      $pathOfLogFile"
+writeToLog "pathOfAcadExecutable:                               $pathOfAcadExecutable"
+writeToLog "pathOfAcadCoreConsoleExecutable:                    $pathOfAcadCoreConsoleExecutable"
+writeToLog "pathOfDirectoryInWhichToSearchForDwgFiles:          $pathOfDirectoryInWhichToSearchForDwgFiles"
+writeToLog "pathOfTemporaryAcadConsoleLogDirectory:             $pathOfTemporaryAcadConsoleLogDirectory"
+writeToLog "pathOfBusinessScriptFile:                           $pathOfBusinessScriptFile"
+writeToLog "pathOfSetupScriptFile:                              $pathOfSetupScriptFile"
+writeToLog "pathOfPopupSlapdownScriptFile:                      $pathOfPopupSlapdownScriptFile"
+writeToLog "pathOfWorkingDirectoryInWhichToRunAcad:             $pathOfWorkingDirectoryInWhichToRunAcad"
+writeToLog "PSScriptRoot:                                       $PSScriptRoot"
+writeToLog "PSVersionTable.PSVersion:                           $($PSVersionTable.PSVersion)"
+writeToLog "skipToOrdinal:                                      $skipToOrdinal"     
+writeToLog "doObscureNonactiveDwgFiles:                         $doObscureNonactiveDwgFiles"     
+writeToLog "pathOfStdoutCollectorFile:                          $pathOfStdoutCollectorFile"     
+writeToLog "pathOfStderrCollectorFile:                          $pathOfStderrCollectorFile"     
+writeToLog "setupScriptContent:`n$(indent $setupScriptContent -doLineNumbers $true)"     
+writeToLog "businessScriptContent:`n$(indent $businessScriptContent -doLineNumbers $true)"     
 
 
 # obscuringSuffix is a a a suffix that we can stick on the file extension to effectively hide the file from autocad, 
@@ -784,11 +784,10 @@ if($pathsOfDwgFilesToProcess){
             $totalFirstPassProcessingDuration += $result1.processingDuration
             $totalSecondPassProcessingDuration += $result2.processingDuration
 
-            $changeInProcessingDuration = ($result2.processingDuration - $result1.processingDuration)
+            # $changeInProcessingDuration = ($result2.processingDuration - $result1.processingDuration)
 
             $m = "" 
-            $m += "file $($i + 1) change in processingDuration:  "
-            $m += "$([math]::Round( $changeInProcessingDuration.TotalSeconds )) seconds." + "`n"
+            $m += "file $($i + 1) processingDuration changed from $([math]::Round( $result1.processingDuration.TotalSeconds )) seconds to $([math]::Round( $result2.processingDuration.TotalSeconds )) seconds."
             writeToLog $m
 
             $countOfProcessedFiles = $countOfProcessedFiles + 1
