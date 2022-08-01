@@ -13,18 +13,18 @@ if($env:computername -match "AUTOSCAN-WK07W7"){
 }
 
 
+
 $pathOfWorkingDirectoryInWhichToRunAcad=$PSScriptRoot
 
 # $pathOfLogFile = (join-path $env:TEMP $MyInvocation.MyCommand.Name) + ".log"
 $pathOfLogFile = (join-path $pathOfDirectoryInWhichToSearchForDwgFiles $MyInvocation.MyCommand.Name) + ".log"
 
 $skipToOrdinal = $null
-# $skipToOrdinal = 235
+# $skipToOrdinal = 145
 # a hack for resuming our place in the sequence, intended for use in debugging.
 # unassign or set to $null to to not skip anything
 
 $doObscureNonactiveDwgFiles = $True
-
 
 
 
@@ -60,16 +60,19 @@ writeToLog "$($MyInvocation.MyCommand.Name) is running."
 
 
 
+$pathOfMyOwnTempDirectory = join-path $env:TEMP ((New-Guid).Guid)
+New-Item -ItemType "directory" -Path $pathOfMyOwnTempDirectory | Out-Null
 
-$pathOfTemporaryAcadConsoleLogDirectory = join-path $env:TEMP ((New-Guid).Guid)
-$pathOfTemporarySlapdownLogDirectory = join-path $env:TEMP ((New-Guid).Guid)
-$pathOfStdoutCollectorFile = join-path $env:TEMP ((New-Guid).Guid)
-$pathOfStderrCollectorFile = join-path $env:TEMP ((New-Guid).Guid)
+$pathOfTemporaryAcadConsoleLogDirectory = join-path $pathOfMyOwnTempDirectory "log_accumulators/acad_console_log_accumulator"
+$pathOfTemporarySlapdownLogDirectory = join-path $pathOfMyOwnTempDirectory "log_accumulators/slapdown_log_accumulator"
+$pathOfStdoutCollectorFile = join-path $pathOfMyOwnTempDirectory "log_accumulators/stdout_accumulator"
+$pathOfStderrCollectorFile = join-path $pathOfMyOwnTempDirectory "log_accumulators/stderr_accumulator"
 
-
+$pathOfReviewableAcadConsoleLogDirectory = join-path $pathOfMyOwnTempDirectory "acad_console_logs"
 
 New-Item -ItemType "directory" -Path $pathOfTemporaryAcadConsoleLogDirectory | Out-Null
 New-Item -ItemType "directory" -Path $pathOfTemporarySlapdownLogDirectory    | Out-Null
+New-Item -ItemType "directory" -Path $pathOfReviewableAcadConsoleLogDirectory    | Out-Null
 
 
 
@@ -230,6 +233,10 @@ Loop{
     WinWait, ahk_group anyPopupWindowDefinition
     ; writeToLog("encountered a halting popup window that we will attempt to slap down.")
     ; might consider logging some of the window porperties or window text, etc.
+    WinGet,idOfOffendingWindow,
+    WinGet,processNameOfOffendingWindow,ProcessName,ahk_id %idOfOffendingWindow%
+    writeToLog("idOfOffendingWindow: " . idOfOffendingWindow)
+    writeToLog("processNameOfOffendingWindow: " . processNameOfOffendingWindow)
 
     if WinExist("ahk_group lostSheetSetAssociationWindowDefinition"){
         writeToLog("slapping down sheetset association error")
@@ -272,7 +279,9 @@ Loop{
         forcefullyKillAcad()
     } else if WinExist("ahk_group openDrawingErrorsFoundWindowDefinition") {
         writeToLog("slapping down openDrawingErrorsFound popup")
-        ControlSend, , !n
+        ; ControlSend, , !n
+        ControlClick,No,
+
         ; there are two types of slapdown cases: one where our slapping down 
         ; will simply facilitate acad's inevitable death so we can cut our losses
         ; and mvoe on to the next file to be processed, and another where our slapping down 
@@ -540,7 +549,7 @@ function processSingleDwgFile($pathOfDwgFileToProcess, $pathsOfDwgFilesToObscure
 
     writeToLog  "Now working on dwg file $pathOfDwgFileToProcess"
     $processingDuration          = (New-TimeSpan )        
-            
+
     if ($doObscureNonactiveDwgFiles){
         foreach ($pathOfDwgFile in $pathsOfDwgFilesToObscure){obscure($pathOfDwgFile)}
         unobscure($pathOfDwgFileToProcess)
@@ -631,12 +640,13 @@ function processSingleDwgFile($pathOfDwgFileToProcess, $pathsOfDwgFilesToObscure
 
 
 function processingResultToReport($result, $i){
+    # $startTime = Get-Date 
     $m = ""
 
-    $m += "file $($i + 1) processingDuration:  "
+    $m += "file $($i + 1) processingDuration:               "
     $m += "$([math]::Round($result.processingDuration.TotalSeconds)) seconds." + "`n"
 
-    $m += "file $($i + 1) size:                "
+    $m += "file $($i + 1) size:                             "
     $m += "$(
         if($result.finalFileSize -eq $result.initialFileSize){
             "remained constant at $(toHumanReadableDataSize $result.initialFileSize) ."  
@@ -646,7 +656,7 @@ function processingResultToReport($result, $i){
         }
     )" + "`n"
 
-    $m += "file $($i + 1) hash:                " 
+    $m += "file $($i + 1) hash:                             " 
     $m += "$(
         if($result.finalFileHash -eq $result.initialFileHash){ 
             "remained constant at $($result.initialFileHash) ."  
@@ -655,11 +665,33 @@ function processingResultToReport($result, $i){
         }
     )" + "`n"
 
-    $m +=  "file $($i + 1) acadConsoleLogFileContent:`n$(indent $result.acadConsoleLogFileContent -doLineNumbers $true)" + "`n"
-    $m +=  "file $($i + 1) acadErrFileContent:`n$(indent $result.acadErrFileContent -doLineNumbers $true)" + "`n"
-    $m +=  "file $($i + 1) stdOutContent:`n$(indent $result.stdOutContent -doLineNumbers $true)" + "`n"
-    $m +=  "file $($i + 1) stdErrContent:`n$(indent $result.stdErrContent -doLineNumbers $true)" + "`n"
-    $m +=  "file $($i + 1) slapdownLogFileContent:`n$(indent $result.slapdownLogFileContent -doLineNumbers $true)" + "`n"
+    
+        
+    $pathOfReviewableAcadConsoleLogFile = ((join-path $pathOfReviewableAcadConsoleLogDirectory ([IO.Path]::GetRelativePath($pathOfDirectoryInWhichToSearchForDwgFiles, $pathOfDwgFileToProcess))) + "." + ((New-Guid).Guid) + ".console_log")
+    $pathOfReviewableAcadStdoutLogFile = ((join-path $pathOfReviewableAcadConsoleLogDirectory ([IO.Path]::GetRelativePath($pathOfDirectoryInWhichToSearchForDwgFiles, $pathOfDwgFileToProcess))) + "." + ((New-Guid).Guid) + ".stdout_log")
+    
+    New-Item -ItemType "directory" -Path (Split-Path -Path $pathOfReviewableAcadConsoleLogFile -Parent)  -ErrorAction SilentlyContinue | Out-Null    
+    New-Item -ItemType "directory" -Path (Split-Path -Path $pathOfReviewableAcadStdoutLogFile -Parent) -ErrorAction SilentlyContinue | Out-Null    
+
+    Add-Content -Path $pathOfReviewableAcadConsoleLogFile -Value $result.acadConsoleLogFileContent
+    Add-Content -Path $pathOfReviewableAcadStdoutLogFile -Value $result.stdOutContent
+
+    # $m +=  "file $($i + 1) acadConsoleLogFileContent:`n$(indent $result.acadConsoleLogFileContent -doLineNumbers $true)" + "`n"
+    $m += "file $($i + 1) acadConsoleLogFile:               $pathOfReviewableAcadConsoleLogFile" + "`n"
+    $m += "file $($i + 1) acadConsoleLogFileContent.Length: $($result.acadConsoleLogFileContent.Length)" + "`n"
+
+    # $m +=  "file $($i + 1) stdOutContent:`n$(indent $result.stdOutContent -doLineNumbers $true)" + "`n"
+    $m += "file $($i + 1) stdOutLogFile:                    $pathOfReviewableAcadStdoutLogFile" + "`n"
+    $m += "file $($i + 1) stdOutContent.Length:             $($result.stdOutContent.Length)" + "`n"
+
+
+    $m += "file $($i + 1) acadErrFileContent:               $( if($result.acadErrFileContent.Length -eq 0 ){ "(empty)" } else { "`n(indent $result.acadErrFileContent -doLineNumbers $true)" } )" + "`n"
+    # $m += "file $($i + 1) stdErrContent:`n$(indent $result.stdErrContent -doLineNumbers $true)" + "`n"
+    $m += "file $($i + 1) stdErrContent:                    $( if($result.stdErrContent.Length -eq 0 ){ "(empty)" } else { "`n(indent $result.stdErrContent -doLineNumbers $true)" } )" + "`n"
+    # $m += "file $($i + 1) slapdownLogFileContent:`n$(indent $result.slapdownLogFileContent -doLineNumbers $true)" + "`n"
+    $m += "file $($i + 1) slapdownLogFileContent:           $( if($result.slapdownLogFileContent.Length -eq 0 ){ "(empty)" } else { "`n(indent $result.slapdownLogFileContent -doLineNumbers $true)" } )"
+    # $endTime = Get-Date 
+    # writeToLog "generated report in $(($endTime - $startTime).TotalSeconds) seconds"
     $m
 }
 
@@ -668,6 +700,7 @@ writeToLog "pathOfAcadExecutable:                               $pathOfAcadExecu
 writeToLog "pathOfAcadCoreConsoleExecutable:                    $pathOfAcadCoreConsoleExecutable"
 writeToLog "pathOfDirectoryInWhichToSearchForDwgFiles:          $pathOfDirectoryInWhichToSearchForDwgFiles"
 writeToLog "pathOfTemporaryAcadConsoleLogDirectory:             $pathOfTemporaryAcadConsoleLogDirectory"
+writeToLog "pathOfTemporarySlapdownLogDirectory:                $pathOfTemporarySlapdownLogDirectory"
 writeToLog "pathOfBusinessScriptFile:                           $pathOfBusinessScriptFile"
 writeToLog "pathOfSetupScriptFile:                              $pathOfSetupScriptFile"
 writeToLog "pathOfPopupSlapdownScriptFile:                      $pathOfPopupSlapdownScriptFile"
@@ -678,6 +711,7 @@ writeToLog "skipToOrdinal:                                      $skipToOrdinal"
 writeToLog "doObscureNonactiveDwgFiles:                         $doObscureNonactiveDwgFiles"     
 writeToLog "pathOfStdoutCollectorFile:                          $pathOfStdoutCollectorFile"     
 writeToLog "pathOfStderrCollectorFile:                          $pathOfStderrCollectorFile"     
+writeToLog "pathOfReviewableAcadConsoleLogDirectory:            $pathOfReviewableAcadConsoleLogDirectory"     
 writeToLog "setupScriptContent:`n$(indent $setupScriptContent -doLineNumbers $true)"     
 writeToLog "businessScriptContent:`n$(indent $businessScriptContent -doLineNumbers $true)"     
 
@@ -764,20 +798,21 @@ if($pathsOfDwgFilesToProcess){
 
 
 
-
-
     for ($i=0; $i -lt $pathsOfDwgFilesToProcess.length; $i++){
         if ( ($skipToOrdinal -ne $null)  -and ( ($i + 1) -lt  $skipToOrdinal)  ){
             writeToLog "skipping until we reach ordinal $skipToOrdinal"
         } else {          
             $pathOfDwgFileToProcess = $pathsOfDwgFilesToProcess[$i]
+                
             writeToLog  "Now working on dwg file $($i + 1) of $($pathsOfDwgFilesToProcess.length): $pathOfDwgFileToProcess"
 
             $result1 = (processSingleDwgFile -pathOfDwgFileToProcess $pathOfDwgFileToProcess -pathsOfDwgFilesToObscure $pathsOfDwgFilesToProcess)
             writeToLog "file $($i + 1) first pass processing report:  `n$(indent (processingResultToReport $result1 $i))"
+            # writeToLog "file $($i + 1) first pass report written."
 
             $result2 = (processSingleDwgFile -pathOfDwgFileToProcess $pathOfDwgFileToProcess -pathsOfDwgFilesToObscure $pathsOfDwgFilesToProcess)
             writeToLog "file $($i + 1) second pass processing report:  `n$(indent (processingResultToReport $result2 $i))"
+            # writeToLog "file $($i + 1) second pass report written."
             
             $totalInitialFileSize += $result1.initialFileSize
             $totalFinalFileSize += $result2.finalFileSize
@@ -787,7 +822,10 @@ if($pathsOfDwgFilesToProcess){
             # $changeInProcessingDuration = ($result2.processingDuration - $result1.processingDuration)
 
             $m = "" 
-            $m += "file $($i + 1) processingDuration changed from $([math]::Round( $result1.processingDuration.TotalSeconds )) seconds to $([math]::Round( $result2.processingDuration.TotalSeconds )) seconds." + "`n"
+            $m += "file $($i + 1) processingDuration changed from $([math]::Round( $result1.processingDuration.TotalSeconds )) seconds to $([math]::Round( $result2.processingDuration.TotalSeconds )) seconds." 
+            writeToLog $m
+
+            $m = "" 
             $m += "file $($i + 1) size changed from $(toHumanReadableDataSize $result1.initialFileSize) to $(toHumanReadableDataSize $result2.finalFileSize) ."
             writeToLog $m
 
