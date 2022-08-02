@@ -19,22 +19,17 @@ $pathOfWorkingDirectoryInWhichToRunAcad=$PSScriptRoot
 $pathOfLogFile = "$(join-path $pathOfDirectoryInWhichToSearchForDwgFiles $MyInvocation.MyCommand.Name).log"
 
 $skipToOrdinal = $null
-# $skipToOrdinal = 237
+# $skipToOrdinal = 84
 # a hack for resuming our place in the sequence, intended for use in debugging.
 # unassign or set to $null to to not skip anything
 
 $doObscureNonactiveDwgFiles = $True
-
-
-
-
 
 function writeToLog($x){
     $stringToAppend = "$(Get-Date -Format "yyyy/MM/dd HH:mm:ss"): $x"
     Add-Content -Path $pathOfLogFile -Value "$stringToAppend"
     Write-Host "$stringToAppend"
 }
-
 
 function setRegistryValueInAllAcadProfiles($relativePathAndName, $value){
     $registryPathOfUserKey  = Join-Path "HKEY_USERS" $((Get-Item -Path "registry::HKLM\Software\Microsoft\Windows\CurrentVersion\Authentication\LogonUI").GetValue("LastLoggedOnUserSID"))
@@ -56,11 +51,7 @@ function getPlainGuidString(){
     (New-Guid).Guid -replace "-",""
 }
 
-
-
 writeToLog "$($MyInvocation.MyCommand.Name) is running."
-
-
 
 $pathOfMyOwnTempDirectory = join-path $env:TEMP "fix_$(Get-Date -Format "yyyyMMdd_HHmm")_$(getPlainGuidString)"
 New-Item -ItemType "directory" -Path $pathOfMyOwnTempDirectory | Out-Null
@@ -98,9 +89,6 @@ function sweepAcadConsoleLogToOurLog(){
     writeToLog "acad console log: `n$(indent (flushAcadConsoleLog) -doLineNumbers $true)"
 }
 
-
-
-
 function flushSlapdownLog(){
     $returnValue = ""
     foreach($logFile in (Get-ChildItem -Path $pathOfTemporarySlapdownLogDirectory -File -Recurse )){
@@ -123,7 +111,6 @@ function flushAcadErrFile(){
     }
     $returnValue
 }
-
 
 function sweepAcadErrFileToOurLog(){
     writeToLog "acad err file content: `n$(indent (flushAcadErrFile) -doLineNumbers $true)"
@@ -322,7 +309,6 @@ forcefullyKillAcad(){
 $pathOfPopupSlapdownScriptFile = join-path $pathOfMyOwnTempDirectory "popup_slapdown.ahk"
 Set-Content -NoNewLine -Encoding ascii -Path $pathOfPopupSlapdownScriptFile -Value $popupSlapdownScriptContent
 
-
 $businessScriptContent = @"
 LOGFILEMODE 1
 LOGFILEPATH $pathOfTemporaryAcadConsoleLogDirectory
@@ -354,9 +340,6 @@ QUIT Y
 $pathOfSetupScriptFile=join-path $pathOfMyOwnTempDirectory "setup_script.scr"
 Set-Content -NoNewLine -Encoding ascii -Path $pathOfSetupScriptFile -Value $setupScriptContent
 
-
-
-
 $obscuringSuffix="220d09e398c24"
 $dwgExtension=".dwg"
 
@@ -372,7 +355,6 @@ $dwgExtension=".dwg"
 # real life, although this is a bit of a lazy assumption, but good encough for
 # the prupose at hand.
 # we also assume that for each obscured, unobscured pair, only one of those files actually exists.
-
 
 function getUnobscuredPath($pathOfFile){
     #takes a path that can be either obscured or unobscured, and returns the
@@ -395,7 +377,6 @@ function getUnobscuredPath($pathOfFile){
         $pathOfFile
     }
 }
-
 
 function getObscuredPath($pathOfFile){
     #takes a path that can be either obscured or unobscured, and returns the
@@ -524,7 +505,6 @@ function startAcadProcess($argumentList, $pathOfScriptFile=$null, $pathOfDwgFile
     $process
 }
 
-
 function processSingleDwgFile($pathOfDwgFileToProcess, $pathsOfDwgFilesToObscure){
     #returns a dwgProcessingResult object
 
@@ -562,9 +542,6 @@ function processSingleDwgFile($pathOfDwgFileToProcess, $pathsOfDwgFilesToObscure
     $process | Wait-Process
     $endTime = Get-Date
     $processingDuration += $endTime - $startTime
-
-    # give some time for autohotkey slapdowns to finish forcefully killing acad (useful in case of fatal error)
-    Start-Sleep -Seconds 1
 
     $acadConsoleLogFileContent += (flushAcadConsoleLog)
     $stdErrContent             += (flushStdErrCollectorFile)
@@ -643,7 +620,6 @@ function toChangeClause($initialValue, $finalValue, $formatter="write-output"){
     }
 }
 
-
 function processingResultToReport($result, $i){
     # $startTime = Get-Date 
     $m = ""
@@ -675,11 +651,11 @@ function processingResultToReport($result, $i){
     $m += "file $($i + 1) stdOutContent.Length:             $($result.stdOutContent.Length)" + "`n"
 
 
-    $m += "file $($i + 1) acadErrFileContent:               $( if($result.acadErrFileContent.Length -eq 0 ){ "(empty)" } else { "`n(indent $($result.acadErrFileContent) -doLineNumbers $true)" } )" + "`n"
+    $m += "file $($i + 1) acadErrFileContent:               $( if($result.acadErrFileContent.Length -eq 0 ){ "(empty)" } else { "`n$(indent $result.acadErrFileContent -doLineNumbers $true)" } )" + "`n"
     # $m += "file $($i + 1) stdErrContent:`n$(indent $result.stdErrContent -doLineNumbers $true)" + "`n"
-    $m += "file $($i + 1) stdErrContent:                    $( if($result.stdErrContent.Length -eq 0 ){ "(empty)" } else { "`n(indent $($result.stdErrContent) -doLineNumbers $true)" } )" + "`n"
+    $m += "file $($i + 1) stdErrContent:                    $( if($result.stdErrContent.Length -eq 0 ){ "(empty)" } else { "`n$(indent $result.stdErrContent -doLineNumbers $true)" } )" + "`n"
     # $m += "file $($i + 1) slapdownLogFileContent:`n$(indent $result.slapdownLogFileContent -doLineNumbers $true)" + "`n"
-    $m += "file $($i + 1) slapdownLogFileContent:           $( if($result.slapdownLogFileContent.Length -eq 0 ){ "(empty)" } else { "`n(indent $($result.slapdownLogFileContent) -doLineNumbers $true)" } )"
+    $m += "file $($i + 1) slapdownLogFileContent:           $( if($result.slapdownLogFileContent.Length -eq 0 ){ "(empty)" } else { "`n$(indent $result.slapdownLogFileContent -doLineNumbers $true)" } )"
     # $endTime = Get-Date 
     # writeToLog "generated report in $(toHumanReadableDuration($endTime - $startTime))"
     $m
@@ -705,32 +681,14 @@ writeToLog "pathOfReviewableAcadConsoleLogDirectory:            $pathOfReviewabl
 writeToLog "setupScriptContent:`n$(indent $setupScriptContent -doLineNumbers $true)"     
 writeToLog "businessScriptContent:`n$(indent $businessScriptContent -doLineNumbers $true)"     
 
-
 # obscuringSuffix is a a a suffix that we can stick on the file extension to effectively hide the file from autocad, 
 # in order to prevent autocad from loading the file as an xref.
-# $pathsOfDwgFilesToProcess = @(Get-ChildItem -Path $pathOfDirectoryInWhichToSearchForDwgFiles -File -Recurse | Where-Object {$_.Extension -eq ".dwg"} | foreach-object {$_.FullName})
-# $pathsOfDwgFilesToProcess = @( 
-#     Get-ChildItem -Path $pathOfDirectoryInWhichToSearchForDwgFiles -File -Recurse `
-#         | Where-Object {$_.Extension -in @($nonobscuredDwgExtension, $obscuredDwgExtension)} `
-#         | foreach-object {$_.FullName}
-# )
-# we are processing "obscured" in case they are left over from an aborted previous run of theis script.
-## actually not bothering with that.
-# $pathsOfDwgFilesToProcess = @( 
-#     Get-ChildItem -Path $pathOfDirectoryInWhichToSearchForDwgFiles -File -Recurse `
-#         | Where-Object {$_.Extension -eq $nonobscuredDwgExtension} `
-#         | foreach-object {$_.FullName}
-# )
-
 $pathsOfDwgFilesToProcess = @( 
     Get-ChildItem -Path $pathOfDirectoryInWhichToSearchForDwgFiles -File -Recurse `
         | foreach-object {getUnobscuredPath $_.FullName} `
         | Where-Object {(split-path $_ -Extension) -eq $dwgExtension}
 )
-
 # $pathsOfDwgFilesToProcess will always contain the unobscured form of the paths.
-
-
 
 $message = "We will now process $($pathsOfDwgFilesToProcess.length) dwg files: " + "`n"
 $message += indent ( 
@@ -790,7 +748,7 @@ Try {
 
 
         for ($i=0; $i -lt $pathsOfDwgFilesToProcess.length; $i++){
-            if ( ($skipToOrdinal -ne $null)  -and ( ($i + 1) -lt  $skipToOrdinal)  ){
+            if ( ($null -ne $skipToOrdinal)  -and ( ($i + 1) -lt  $skipToOrdinal)  ){
                 writeToLog "skipping until we reach ordinal $skipToOrdinal"
             } else {          
                 $pathOfDwgFileToProcess = $pathsOfDwgFilesToProcess[$i]
@@ -800,16 +758,13 @@ Try {
                 $result1 = (processSingleDwgFile -pathOfDwgFileToProcess $pathOfDwgFileToProcess -pathsOfDwgFilesToObscure $pathsOfDwgFilesToProcess)
                 writeToLog "file $($i + 1) first pass processing report:  `n$(indent (processingResultToReport $result1 $i))"
 
-
                 $result2 = (processSingleDwgFile -pathOfDwgFileToProcess $pathOfDwgFileToProcess -pathsOfDwgFilesToObscure $pathsOfDwgFilesToProcess)
                 writeToLog "file $($i + 1) second pass processing report:  `n$(indent (processingResultToReport $result2 $i))"
 
-                
                 $totalInitialFileSize += $result1.initialFileSize
                 $totalFinalFileSize += $result2.finalFileSize
                 $totalFirstPassProcessingDuration += $result1.processingDuration
                 $totalSecondPassProcessingDuration += $result2.processingDuration
-
 
                 $m = "" 
                 $m += "file $($i + 1) processingDuration "
@@ -824,9 +779,7 @@ Try {
                 $countOfProcessedFiles = $countOfProcessedFiles + 1
             }
         }
-
     }
-
     writeToLog  "finished"
 } Finally {
     #cleanup:
