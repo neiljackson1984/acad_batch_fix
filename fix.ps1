@@ -16,11 +16,10 @@ if($env:computername -match "AUTOSCAN-WK07W7"){
 
 $pathOfWorkingDirectoryInWhichToRunAcad=$PSScriptRoot
 
-# $pathOfLogFile = (join-path $env:TEMP $MyInvocation.MyCommand.Name) + ".log"
-$pathOfLogFile = (join-path $pathOfDirectoryInWhichToSearchForDwgFiles $MyInvocation.MyCommand.Name) + ".log"
+$pathOfLogFile = "$(join-path $pathOfDirectoryInWhichToSearchForDwgFiles $MyInvocation.MyCommand.Name).log"
 
 $skipToOrdinal = $null
-# $skipToOrdinal = 145
+$skipToOrdinal = 237
 # a hack for resuming our place in the sequence, intended for use in debugging.
 # unassign or set to $null to to not skip anything
 
@@ -53,6 +52,9 @@ function setRegistryValueInAllAcadProfiles($relativePathAndName, $value){
     }
 }
 
+function getPlainGuidString(){
+    (New-Guid).Guid -replace "-",""
+}
 
 
 
@@ -60,23 +62,22 @@ writeToLog "$($MyInvocation.MyCommand.Name) is running."
 
 
 
-$pathOfMyOwnTempDirectory = join-path $env:TEMP ((New-Guid).Guid)
+$pathOfMyOwnTempDirectory = join-path $env:TEMP "fix_$(Get-Date -Format "yyyyMMdd_HHmm")_$(getPlainGuidString)"
 New-Item -ItemType "directory" -Path $pathOfMyOwnTempDirectory | Out-Null
 
-$pathOfTemporaryAcadConsoleLogDirectory = join-path $pathOfMyOwnTempDirectory "log_accumulators/acad_console_log_accumulator"
-$pathOfTemporarySlapdownLogDirectory = join-path $pathOfMyOwnTempDirectory "log_accumulators/slapdown_log_accumulator"
-$pathOfStdoutCollectorFile = join-path $pathOfMyOwnTempDirectory "log_accumulators/stdout_accumulator"
-$pathOfStderrCollectorFile = join-path $pathOfMyOwnTempDirectory "log_accumulators/stderr_accumulator"
-
-$pathOfReviewableAcadConsoleLogDirectory = join-path $pathOfMyOwnTempDirectory "acad_console_logs"
+$pathOfTemporaryAcadConsoleLogDirectory    = join-path $pathOfMyOwnTempDirectory "log_accumulators/acad_console_log_accumulator"
+$pathOfTemporarySlapdownLogDirectory       = join-path $pathOfMyOwnTempDirectory "log_accumulators/slapdown_log_accumulator"
+$pathOfStdoutCollectorFile                 = join-path $pathOfMyOwnTempDirectory "log_accumulators/stdout_accumulator"
+$pathOfStderrCollectorFile                 = join-path $pathOfMyOwnTempDirectory "log_accumulators/stderr_accumulator"
+$pathOfReviewableAcadConsoleLogDirectory   = join-path $pathOfMyOwnTempDirectory "acad_console_logs"
 
 New-Item -ItemType "directory" -Path $pathOfTemporaryAcadConsoleLogDirectory | Out-Null
 New-Item -ItemType "directory" -Path $pathOfTemporarySlapdownLogDirectory    | Out-Null
 New-Item -ItemType "directory" -Path $pathOfReviewableAcadConsoleLogDirectory    | Out-Null
 
 
-
-
+$script:popupSlapdownScriptProcess = $null
+$script:acadProcess = $null
 
 function flushAcadConsoleLog(){
     $returnValue = ""
@@ -167,12 +168,16 @@ function toHumanReadableDataSize($byteCount){
     $formatString -f ($byteCount/([Math]::Pow(10,3)))
 }
 
+function toHumanReadableDuration($timeSpan){
+    "$([math]::Round( $timeSpan.TotalSeconds )) seconds"
+}
+
 function splitStringIntoLines($s){
     # $startTime=Get-Date
     @($s -split "\r?\n")
     # @($s -split "\n")
     # $endTime=Get-Date
-    # writeToLog "splitting took $(($endTime - $startTime).TotalSeconds) seconds"
+    # writeToLog "splitting took $(toHumanReadableDuration($endTime - $startTime))."
 }
 
 function indent($x, $indentLevel=1, $doLineNumbers=$false){
@@ -195,7 +200,7 @@ function indent($x, $indentLevel=1, $doLineNumbers=$false){
     
 
     # $endTime=Get-Date
-    # writeToLog "indenting took $(($endTime - $startTime).TotalSeconds) seconds"
+    # writeToLog "indenting took $(toHumanReadableDuration($endTime - $startTime))."
     $returnValue
 }
 
@@ -329,7 +334,8 @@ forcefullyKillAcad(){
 }
 
 "@
-$pathOfPopupSlapdownScriptFile=join-path $env:TEMP ("popup_slapdown" + ".ahk")
+# $pathOfPopupSlapdownScriptFile=join-path $env:TEMP "popup_slapdown.ahk"
+$pathOfPopupSlapdownScriptFile = join-path $pathOfMyOwnTempDirectory "popup_slapdown.ahk"
 Set-Content -NoNewLine -Encoding ascii -Path $pathOfPopupSlapdownScriptFile -Value $popupSlapdownScriptContent
 
 
@@ -343,7 +349,7 @@ qsave
 QUIT 
 "@
 
-$pathOfBusinessScriptFile=join-path $env:TEMP ((New-Guid).Guid + ".scr")
+$pathOfBusinessScriptFile=join-path $pathOfMyOwnTempDirectory "business_script.scr"
 Set-Content -NoNewLine -Encoding ascii -Path $pathOfBusinessScriptFile -Value $businessScriptContent
 
 $setupScriptContent = @"
@@ -361,7 +367,7 @@ STARTUP 0
 QUIT Y 
 "@
 
-$pathOfSetupScriptFile=join-path $env:TEMP ((New-Guid).Guid + ".scr")
+$pathOfSetupScriptFile=join-path $pathOfMyOwnTempDirectory "setup_script.scr"
 Set-Content -NoNewLine -Encoding ascii -Path $pathOfSetupScriptFile -Value $setupScriptContent
 
 
@@ -482,7 +488,7 @@ function startAcadProcess($argumentList, $pathOfScriptFile=$null, $pathOfDwgFile
         $s['NoNewWindow'] = 1
         
     } elseif($strategy -eq "accoreconsole_with_embedded_open_command"){
-        $pathOfModifiedScriptFile = join-path $env:TEMP ((New-Guid).Guid + ".scr")
+        $pathOfModifiedScriptFile = join-path $pathOfMyOwnTempDirectory "$(getPlainGuidString).scr"
         $modifiedScriptContent = ""
 
         if($null -ne $pathOfScriptFile){
@@ -523,13 +529,14 @@ function startAcadProcess($argumentList, $pathOfScriptFile=$null, $pathOfDwgFile
     #     #  WindowStyle="Minimized"
     #     WindowStyle="Hidden"
     # }; 
-    $s['ArgumentList'] = $argumentList 
-    $s['RedirectStandardOutput']=$pathOfStdoutCollectorFile
-    $s['RedirectStandardError']=$pathOfStderrCollectorFile
+    $s['ArgumentList'            ] = $argumentList 
+    $s['RedirectStandardOutput'  ] = $pathOfStdoutCollectorFile
+    $s['RedirectStandardError'   ] = $pathOfStderrCollectorFile
     Set-Content -NoNewLine -Encoding ascii -Path $pathOfStdoutCollectorFile -Value ""
     Set-Content -NoNewLine -Encoding ascii -Path $pathOfStderrCollectorFile -Value ""
     writeToLog ("command: `"$($s['FilePath'])`" $($argumentList -join " ")")
     $process = Start-Process -PassThru @s 
+    $script:acadProcess = $process
     $process
 }
 
@@ -613,7 +620,7 @@ function processSingleDwgFile($pathOfDwgFileToProcess, $pathsOfDwgFilesToObscure
         unobscure($pathOfDwgFileToProcess)
     }
 
-    # writeToLog "finished processing file $($i + 1) in $([math]::Round($($endTime - $startTime).TotalSeconds)) seconds: $pathOfDwgFileToProcess"
+    # writeToLog "finished processing file $($i + 1) in $(toHumanReadableDuration($endTime - $startTime)): $pathOfDwgFileToProcess"
     
     # writeToLog ("file $($i + 1) size " + "$(if($finalFileSize -eq $initialFileSize){ "remained constant at $(toHumanReadableDataSize $initialFileSize) ."  } else {"changed from $(toHumanReadableDataSize $initialFileSize) to $(toHumanReadableDataSize $finalFileSize) ."})")
     # if ($initialFileHash -eq $finalFileHash){
@@ -638,37 +645,45 @@ function processSingleDwgFile($pathOfDwgFileToProcess, $pathsOfDwgFilesToObscure
     $returnValue
 }
 
+# function toChangeClause($initialValue, $finalValue, $formatter={param([String]$arg0); $arg0}){
+function toChangeClause($initialValue, $finalValue, $formatter="write-output"){
+    # if($initialValue -eq $finalValue){
+    #     "remained constant at $($formatter.Invoke($initialValue))"
+    # } else {
+    #     "changed from $($formatter.Invoke($initialValue)) to $($formatter.Invoke($finalValue))"
+    # }
+    if($initialValue -eq $finalValue){
+        "remained constant at $(& $formatter $initialValue)"
+    } else {
+        "changed from $(& $formatter $initialValue) to $(& $formatter $finalValue)"
+    }
+}
+
 
 function processingResultToReport($result, $i){
     # $startTime = Get-Date 
     $m = ""
 
     $m += "file $($i + 1) processingDuration:               "
-    $m += "$([math]::Round($result.processingDuration.TotalSeconds)) seconds." + "`n"
+    # $m += "$([math]::Round($result.processingDuration.TotalSeconds)) seconds." + "`n"
+    $m += "$(toHumanReadableDuration $result.processingDuration)." + "`n"
 
     $m += "file $($i + 1) size:                             "
-    $m += "$(
-        if($result.finalFileSize -eq $result.initialFileSize){
-            "remained constant at $(toHumanReadableDataSize $result.initialFileSize) ."  
-        } else {
-            "changed from $(toHumanReadableDataSize $result.initialFileSize) " `
-            + "to $(toHumanReadableDataSize $result.finalFileSize) ."
-        }
-    )" + "`n"
+    # $m += "$(
+    #     if($result.finalFileSize -eq $result.initialFileSize){
+    #         "remained constant at $(toHumanReadableDataSize $result.initialFileSize) ."  
+    #     } else {
+    #         "changed from $(toHumanReadableDataSize $result.initialFileSize) " `
+    #         + "to $(toHumanReadableDataSize $result.finalFileSize) ."
+    #     }
+    # )" + "`n"
+    $m += (toChangeClause $result.initialFileSize $result.finalFileSize toHumanReadableDataSize) + "`n"
 
-    $m += "file $($i + 1) hash:                             " 
-    $m += "$(
-        if($result.finalFileHash -eq $result.initialFileHash){ 
-            "remained constant at $($result.initialFileHash) ."  
-        } else {
-            "changed from $($result.initialFileHash) to $($result.finalFileHash) ."
-        }
-    )" + "`n"
 
     
         
-    $pathOfReviewableAcadConsoleLogFile = ((join-path $pathOfReviewableAcadConsoleLogDirectory ([IO.Path]::GetRelativePath($pathOfDirectoryInWhichToSearchForDwgFiles, $pathOfDwgFileToProcess))) + "." + ((New-Guid).Guid) + ".console_log")
-    $pathOfReviewableAcadStdoutLogFile = ((join-path $pathOfReviewableAcadConsoleLogDirectory ([IO.Path]::GetRelativePath($pathOfDirectoryInWhichToSearchForDwgFiles, $pathOfDwgFileToProcess))) + "." + ((New-Guid).Guid) + ".stdout_log")
+    $pathOfReviewableAcadConsoleLogFile = ((join-path $pathOfReviewableAcadConsoleLogDirectory ([IO.Path]::GetRelativePath($pathOfDirectoryInWhichToSearchForDwgFiles, $pathOfDwgFileToProcess))) + "." + (getPlainGuidString) + ".console_log")
+    $pathOfReviewableAcadStdoutLogFile = ((join-path $pathOfReviewableAcadConsoleLogDirectory ([IO.Path]::GetRelativePath($pathOfDirectoryInWhichToSearchForDwgFiles, $pathOfDwgFileToProcess))) + "." + (getPlainGuidString) + ".stdout_log")
     
     New-Item -ItemType "directory" -Path (Split-Path -Path $pathOfReviewableAcadConsoleLogFile -Parent)  -ErrorAction SilentlyContinue | Out-Null    
     New-Item -ItemType "directory" -Path (Split-Path -Path $pathOfReviewableAcadStdoutLogFile -Parent) -ErrorAction SilentlyContinue | Out-Null    
@@ -685,13 +700,13 @@ function processingResultToReport($result, $i){
     $m += "file $($i + 1) stdOutContent.Length:             $($result.stdOutContent.Length)" + "`n"
 
 
-    $m += "file $($i + 1) acadErrFileContent:               $( if($result.acadErrFileContent.Length -eq 0 ){ "(empty)" } else { "`n(indent $result.acadErrFileContent -doLineNumbers $true)" } )" + "`n"
+    $m += "file $($i + 1) acadErrFileContent:               $( if($result.acadErrFileContent.Length -eq 0 ){ "(empty)" } else { "`n(indent $($result.acadErrFileContent) -doLineNumbers $true)" } )" + "`n"
     # $m += "file $($i + 1) stdErrContent:`n$(indent $result.stdErrContent -doLineNumbers $true)" + "`n"
-    $m += "file $($i + 1) stdErrContent:                    $( if($result.stdErrContent.Length -eq 0 ){ "(empty)" } else { "`n(indent $result.stdErrContent -doLineNumbers $true)" } )" + "`n"
+    $m += "file $($i + 1) stdErrContent:                    $( if($result.stdErrContent.Length -eq 0 ){ "(empty)" } else { "`n(indent $($result.stdErrContent) -doLineNumbers $true)" } )" + "`n"
     # $m += "file $($i + 1) slapdownLogFileContent:`n$(indent $result.slapdownLogFileContent -doLineNumbers $true)" + "`n"
-    $m += "file $($i + 1) slapdownLogFileContent:           $( if($result.slapdownLogFileContent.Length -eq 0 ){ "(empty)" } else { "`n(indent $result.slapdownLogFileContent -doLineNumbers $true)" } )"
+    $m += "file $($i + 1) slapdownLogFileContent:           $( if($result.slapdownLogFileContent.Length -eq 0 ){ "(empty)" } else { "`n(indent $($result.slapdownLogFileContent) -doLineNumbers $true)" } )"
     # $endTime = Get-Date 
-    # writeToLog "generated report in $(($endTime - $startTime).TotalSeconds) seconds"
+    # writeToLog "generated report in $(toHumanReadableDuration($endTime - $startTime))"
     $m
 }
 
@@ -750,90 +765,105 @@ for ($i=0; $i -lt $pathsOfDwgFilesToProcess.length; $i++){
 writeToLog  $message
 
 
-
-if($pathsOfDwgFilesToProcess){
-    $overallStartTime = Get-Date
-    $countOfProcessedFiles = 0
-    $totalInitialFileSize = 0
-    $totalFinalFileSize = 0
-    $totalFirstPassProcessingDuration = New-TimeSpan
-    $totalSecondPassProcessingDuration = New-TimeSpan
-
-
-    if ($doObscureNonactiveDwgFiles){
-        writeToLog  "Now ensuring that all dwg files are obscured."
-        foreach ($pathOfDwgFileToProcess in $pathsOfDwgFilesToProcess) {obscure($pathOfDwgFileToProcess)}
-    }
-
-    
-    
-    sweepAcadErrFileToOurLog 
-    
-    # it would be better to just delete any existing
-    # error file rather than sweeping it to our log, because the error file, if
-    # it exists, would not be related to what we are doing in this invokaction
-    # of the script, because we have not yet run autocad (in this invokation).
-    # the goal is to get rid of any existing error file toa void inadvertently
-    # sweeping an old, irrelevant, error file into our log with the calls to
-    # sweepAcadErrFileToOurLog, below.
-    # but betterr to sweep here then to do nothing at all to delete any existing error file.
+Try {
+    if($pathsOfDwgFilesToProcess){
+        $overallStartTime = Get-Date
+        $countOfProcessedFiles = 0
+        $totalInitialFileSize = 0
+        $totalFinalFileSize = 0
+        $totalFirstPassProcessingDuration = New-TimeSpan
+        $totalSecondPassProcessingDuration = New-TimeSpan
 
 
-    writeToLog  "Now starting the popup slapdown script"
-    Start-Process -FilePath $pathOfPopupSlapdownScriptFile
-    
-    writeToLog  "Now setting AutoCAD system variables via registry"
-    setRegistryValueInAllAcadProfiles -relativePathAndName "Variables\STARTUP" -value "0"
-    setRegistryValueInAllAcadProfiles -relativePathAndName "Variables\STARTMODE" -value "0"
-
-    writeToLog  "Now running the autoCAD setup script."
-    $process = startAcadProcess -pathOfScriptFile $pathOfSetupScriptFile
-    
-    # Write-Host "process: ";    $process | fl
-    $process | Wait-Process
-    sweepAcadConsoleLogToOurLog   
-    sweepAcadErrFileToOurLog
-    sweepSlapdownLogToOurLog
-    sweepStandardStreamCollectorFilesToOurLog
-
-
-
-    for ($i=0; $i -lt $pathsOfDwgFilesToProcess.length; $i++){
-        if ( ($skipToOrdinal -ne $null)  -and ( ($i + 1) -lt  $skipToOrdinal)  ){
-            writeToLog "skipping until we reach ordinal $skipToOrdinal"
-        } else {          
-            $pathOfDwgFileToProcess = $pathsOfDwgFilesToProcess[$i]
-                
-            writeToLog  "Now working on dwg file $($i + 1) of $($pathsOfDwgFilesToProcess.length): $pathOfDwgFileToProcess"
-
-            $result1 = (processSingleDwgFile -pathOfDwgFileToProcess $pathOfDwgFileToProcess -pathsOfDwgFilesToObscure $pathsOfDwgFilesToProcess)
-            writeToLog "file $($i + 1) first pass processing report:  `n$(indent (processingResultToReport $result1 $i))"
-            # writeToLog "file $($i + 1) first pass report written."
-
-            $result2 = (processSingleDwgFile -pathOfDwgFileToProcess $pathOfDwgFileToProcess -pathsOfDwgFilesToObscure $pathsOfDwgFilesToProcess)
-            writeToLog "file $($i + 1) second pass processing report:  `n$(indent (processingResultToReport $result2 $i))"
-            # writeToLog "file $($i + 1) second pass report written."
-            
-            $totalInitialFileSize += $result1.initialFileSize
-            $totalFinalFileSize += $result2.finalFileSize
-            $totalFirstPassProcessingDuration += $result1.processingDuration
-            $totalSecondPassProcessingDuration += $result2.processingDuration
-
-            # $changeInProcessingDuration = ($result2.processingDuration - $result1.processingDuration)
-
-            $m = "" 
-            $m += "file $($i + 1) processingDuration changed from $([math]::Round( $result1.processingDuration.TotalSeconds )) seconds to $([math]::Round( $result2.processingDuration.TotalSeconds )) seconds." 
-            writeToLog $m
-
-            $m = "" 
-            $m += "file $($i + 1) size changed from $(toHumanReadableDataSize $result1.initialFileSize) to $(toHumanReadableDataSize $result2.finalFileSize) ."
-            writeToLog $m
-
-            $countOfProcessedFiles = $countOfProcessedFiles + 1
+        if ($doObscureNonactiveDwgFiles){
+            writeToLog  "Now ensuring that all dwg files are obscured."
+            foreach ($pathOfDwgFileToProcess in $pathsOfDwgFilesToProcess) {obscure($pathOfDwgFileToProcess)}
         }
+
+        
+        
+        sweepAcadErrFileToOurLog 
+        
+        # it would be better to just delete any existing
+        # error file rather than sweeping it to our log, because the error file, if
+        # it exists, would not be related to what we are doing in this invokaction
+        # of the script, because we have not yet run autocad (in this invokation).
+        # the goal is to get rid of any existing error file toa void inadvertently
+        # sweeping an old, irrelevant, error file into our log with the calls to
+        # sweepAcadErrFileToOurLog, below.
+        # but betterr to sweep here then to do nothing at all to delete any existing error file.
+
+
+        writeToLog  "Now starting the popup slapdown script"
+        $script:popupSlapdownScriptProcess = Start-Process -FilePath $pathOfPopupSlapdownScriptFile -PassThru
+        
+        writeToLog  "Now setting AutoCAD system variables via registry"
+        setRegistryValueInAllAcadProfiles -relativePathAndName "Variables\STARTUP" -value "0"
+        setRegistryValueInAllAcadProfiles -relativePathAndName "Variables\STARTMODE" -value "0"
+
+        writeToLog  "Now running the autoCAD setup script."
+        $process = startAcadProcess -pathOfScriptFile $pathOfSetupScriptFile
+        
+        # Write-Host "process: ";    $process | fl
+        $process | Wait-Process
+        sweepAcadConsoleLogToOurLog   
+        sweepAcadErrFileToOurLog
+        sweepSlapdownLogToOurLog
+        sweepStandardStreamCollectorFilesToOurLog
+
+
+
+        for ($i=0; $i -lt $pathsOfDwgFilesToProcess.length; $i++){
+            if ( ($skipToOrdinal -ne $null)  -and ( ($i + 1) -lt  $skipToOrdinal)  ){
+                writeToLog "skipping until we reach ordinal $skipToOrdinal"
+            } else {          
+                $pathOfDwgFileToProcess = $pathsOfDwgFilesToProcess[$i]
+                    
+                writeToLog  "Now working on dwg file $($i + 1) of $($pathsOfDwgFilesToProcess.length): $pathOfDwgFileToProcess"
+
+                $result1 = (processSingleDwgFile -pathOfDwgFileToProcess $pathOfDwgFileToProcess -pathsOfDwgFilesToObscure $pathsOfDwgFilesToProcess)
+                writeToLog "file $($i + 1) first pass processing report:  `n$(indent (processingResultToReport $result1 $i))"
+                # writeToLog "file $($i + 1) first pass report written."
+
+                $result2 = (processSingleDwgFile -pathOfDwgFileToProcess $pathOfDwgFileToProcess -pathsOfDwgFilesToObscure $pathsOfDwgFilesToProcess)
+                writeToLog "file $($i + 1) second pass processing report:  `n$(indent (processingResultToReport $result2 $i))"
+                # writeToLog "file $($i + 1) second pass report written."
+                
+                $totalInitialFileSize += $result1.initialFileSize
+                $totalFinalFileSize += $result2.finalFileSize
+                $totalFirstPassProcessingDuration += $result1.processingDuration
+                $totalSecondPassProcessingDuration += $result2.processingDuration
+
+                # $changeInProcessingDuration = ($result2.processingDuration - $result1.processingDuration)
+
+                $m = "" 
+                # $m += "file $($i + 1) processingDuration changed from $([math]::Round( $result1.processingDuration.TotalSeconds )) seconds to $([math]::Round( $result2.processingDuration.TotalSeconds )) seconds." 
+                $m += "file $($i + 1) processingDuration "
+                $m += (toChangeClause $result1.processingDuration $result2.processingDuration toHumanReadableDuration) + "."
+                writeToLog $m
+
+                $m = "" 
+                # $m += "file $($i + 1) size changed from $(toHumanReadableDataSize $result1.initialFileSize) to $(toHumanReadableDataSize $result2.finalFileSize) ."
+                $m += "file $($i + 1) size "
+                $m += (toChangeClause $result1.initialFileSize $result2.finalFileSize toHumanReadableDataSize) + "."
+                writeToLog $m
+
+                $countOfProcessedFiles = $countOfProcessedFiles + 1
+            }
+        }
+
     }
 
+    writeToLog  "finished"
+} Finally {
+    #cleanup:
+    Write-Host "cleaning up..."
 
+
+    $script:popupSlapdownScriptProcess.Kill($True)
+    $script:acadProcess.Kill($True)
+
+        
 
     if ($doObscureNonactiveDwgFiles){
         writeToLog  "Now ensuring that all dwg files are non-obscured."
@@ -842,13 +872,17 @@ if($pathsOfDwgFilesToProcess){
 
     $overallEndTime = Get-Date
 
-    writeToLog "processed $countOfProcessedFiles files in $([math]::Round($($overallEndTime - $overallStartTime).TotalSeconds)) seconds."
-    writeToLog "total size of processed files changed from $(toHumanReadableDataSize $totalInitialFileSize) to $(toHumanReadableDataSize $totalFinalFileSize) ."
-    writeToLog "between first and second passes, total processing duration changed from $([math]::Round($totalFirstPassProcessingDuration.TotalSeconds)) seconds to $([math]::Round($totalSecondPassProcessingDuration.TotalSeconds)) seconds ."
+    # writeToLog "processed $countOfProcessedFiles files in $([math]::Round($($overallEndTime - $overallStartTime).TotalSeconds)) seconds."
+    writeToLog "processed $countOfProcessedFiles files in $(toHumanReadableDuration($overallEndTime - $overallStartTime))."
+    
+    # writeToLog "total size of processed files changed from $(toHumanReadableDataSize $totalInitialFileSize) to $(toHumanReadableDataSize $totalFinalFileSize) ."
+    writeToLog "total size of processed files $(toChangeClause $totalInitialFileSize $totalFinalFileSize toHumanReadableDataSize)."
+    
+    # writeToLog "between first and second passes, total processing duration changed from $([math]::Round($totalFirstPassProcessingDuration.TotalSeconds)) seconds to $([math]::Round($totalSecondPassProcessingDuration.TotalSeconds)) seconds ."
+    writeToLog "between first and second passes, total processing duration $(toChangeClause $totalFirstPassProcessingDuration $totalSecondPassProcessingDuration toHumanReadableDuration)."
+
+
 }
-
-writeToLog  "finished"
-
 
 
 # == various AutoCAD prompts for user-intervention that tend to appear while
