@@ -56,3 +56,14 @@ This is file 202 in my test set.
 taskkill -t -f -im acad.exe ; taskkill -t -f -im accoreconsole.exe ;  git -C "C:/work/nakano_marginal_way" reset --hard; git -C "C:/work/nakano_marginal_way" clean -fxd :/; rm -f "C:/work/nakano_marginal_way/fix.ps1.log"
 
 C:\work\nakano_marginal_way\wsp-us-pw-02\d0339745\ver00002\TRC0975_X-PH1-TRK.dwg
+
+https://raw.githubusercontent.com/neiljackson1984/acad_batch_fix/master/fix.ps1
+
+https://github.com/neiljackson1984/acad_batch_fix/blob/master/fix.ps1
+https://github.com/neiljackson1984/acad_batch_fix/trunk/fix.ps1
+https://api.github.com/repos/:owner/:repo/contents/:path
+https://api.github.com/repos/neiljackson1984/acad_batch_fix/master/contents/fix.ps1
+https://api.github.com/repos/neiljackson1984/acad_batch_fix/contents/fix.ps1
+https://api.github.com/repos/neiljackson1984/acad_batch_fix/contents/fix.ps1?ref=master
+
+https://github.com/downloads/neiljackson1984acad_batch_fix/master/fix.ps1
