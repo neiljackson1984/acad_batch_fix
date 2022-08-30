@@ -67,3 +67,24 @@ https://api.github.com/repos/neiljackson1984/acad_batch_fix/contents/fix.ps1
 https://api.github.com/repos/neiljackson1984/acad_batch_fix/contents/fix.ps1?ref=master
 
 https://github.com/downloads/neiljackson1984acad_batch_fix/master/fix.ps1
+
+
+
+# 2022-08-23-1354
+# to process a batch of files pushed by Elizabeth (which she will have pushed as a commit on the master branch):
+
+
+cd "C:/work/nakano_marginal_way"
+taskkill -t -f -im acad.exe ; taskkill -t -f -im accoreconsole.exe ;  
+git  reset --hard
+git  clean -fxd :/
+git  checkout master
+git  reset --hard
+git  clean -fxd :/
+git  pull 
+env "J:/Nakano/2022-02-08_projectwise_aec_acad_troubleshoot/acad_batch_fix/fix.ps1"
+git  add *
+git  commit -am "ran fix.ps1"
+git  tag -a -m "tagging just to ensure we don't lose track of this commit." "atag_$(git rev-parse --short=5 HEAD)"
+git  push --tags
+git  reset --hard origin/master
